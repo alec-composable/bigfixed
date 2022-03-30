@@ -1,98 +1,214 @@
-use std::{fmt, convert, ops};
+use crate::digit::*;
 
-use std::cmp::{max, min};
+use std::{fmt, convert, /*, ops, cmp::{max, min}*/};
 
-// all zeros
-pub const Z64: u64 = 0;
-// all ones
-pub const O64: u64 = (-1 as i64) as u64;
-pub const O64D: u128 = O64 as u128;
-// highest bit only
-pub const H64: u64 = (1 as u64) << 63;
+use num::BigUint;
 
 #[derive(Clone)]
 pub struct BigFixed {
-    pub data: Vec<u64>,
-    pub data_low: i64,
-    pub data_high: i64,
+    pub data: Vec<Digit>,
+    pub position: isize
 }
 
 impl BigFixed {
-    pub fn neg(&self) -> bool {
-        self.data[self.width() - 1] >= H64
+    pub fn from_bytes_les(bytes: &[u8]) -> BigFixed {
+        assert_eq!(bytes.len() % DIGITBYTES, 0, "byte stream must be a multiple of {}", DIGITBYTES);
+
+        // number of positions required
+        let len: usize = bytes.len() / DIGITBYTES;
+        
+        let mut data: Vec<Digit> = Vec::with_capacity(len);
+        data.extend(
+            (0..len).map(
+                |i| i * DIGITBYTES
+            ).map(
+                |j| digit_from_bytes(&bytes[j..(j+DIGITBYTES)])
+            )
+        );
+        BigFixed {
+            data: data,
+            position: 0
+        }.trim()
     }
 
-    pub fn width(&self) -> usize {
-        (self.data_high - self.data_low) as usize
+    pub fn from_bytes_leu(bytes: &[u8]) -> BigFixed {
+        let mut padded_bytes: Vec<u8> = Vec::with_capacity(bytes.len() + DIGITBYTES);
+        padded_bytes.extend_from_slice(bytes);
+        padded_bytes.resize(bytes.len() + DIGITBYTES, 0);
+        BigFixed::from_bytes_les(&padded_bytes)
     }
 
-    pub fn get(&self, position: i64) -> u64 {
-        if position < self.data_low {
-            0
-        } else if position > self.data_high {
-            if self.neg() {
-                O64
-            } else {
-                0
-            }
+    pub fn cast_unsigned(mut self) -> BigFixed {
+        if self.is_neg() {
+            self.data.push(0);
+        }
+        self
+    }
+
+    pub fn raw_get(&self, position: isize) -> Digit {
+        let shifted = position - self.position;
+        debug_assert!(shifted >= 0 && (shifted as usize) < self.data.len(), "bad position {}", position);
+        self.data[shifted as usize]
+    }
+
+    pub fn greatest_digit(&self) -> Digit {
+        if self.data.len() > 0 {
+            self.data[self.data.len() - 1]
         } else {
-            self.data[(position - self.data_low) as usize]
+            0
         }
-
     }
 
-    pub fn raw_set(&mut self, position: i64, value: u64) {
-        self.data[(position - self.data_low) as usize] = value
+    pub fn trim(mut self) -> BigFixed {
+        while self.data.len() > 1 && (
+            (self.data[self.data.len() - 1] == 0 && self.data[self.data.len() - 2] < GREATESTBIT) ||
+            (self.data[self.data.len() - 1] == ALLONES && self.data[self.data.len() - 2] >= GREATESTBIT)
+        ) {
+            self.data.pop();
+        }
+        while self.data.len() > 0 && self.data[0] == 0 {
+            self.data.remove(0);
+            self.position = self.position + 1;
+        }
+        if self.data.len() == 0 {
+            self.position = 0;
+        }
+        self
     }
 
-    pub fn set(&mut self, position: i64, value: u64) {
-        if position > self.data_high {
+    pub fn is_neg(&self) -> bool {
+        self.greatest_digit() >= GREATESTBIT
+    }
 
-        } else if position < self.data_low {
-
+    pub fn neg(&self) -> BigFixed {
+        let mut data: Vec<Digit> = self.data.iter().map(|x| x ^ ALLONES).collect();
+        let i = 0;
+        let len = self.data.len();
+        while i < len {
+            data[i] = add(data[i], 1);
+            if data[i] != 0 {break}
         }
-        self.raw_set(position, value)
+        BigFixed {
+            data: data,
+            position: self.position
+        }.trim()
+    }
+
+    pub fn to_bytes(&self) -> Vec<u8> {
+        let bytes: Vec<u8> = self.data.iter().flat_map(|x| x.to_le_bytes()).collect();
+        bytes
     }
 }
 
 impl fmt::Display for BigFixed {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{:?}", self.data)
+        let neg = self.is_neg();
+        let bytes = if neg {self.neg().to_bytes()} else {self.to_bytes()};
+        let big = BigUint::from_bytes_le(&bytes);
+        write!(f, "{}{}, {:?}", if neg {"-"} else {""}, big, self.data)
     }
 }
 
-impl convert::From<i64> for BigFixed {
-    fn from(i: i64) -> BigFixed {
-        BigFixed {
-            data: vec![i as u64],
-            data_low: 0,
-            data_high: 0
+impl convert::From<i8> for BigFixed {
+    fn from(i: i8) -> BigFixed {
+        if DIGITBYTES > 1 {
+            BigFixed::from_bytes_les(&(i as SignedDigit).to_le_bytes())
+        } else {
+            BigFixed::from_bytes_les(&i.to_le_bytes())
+        }
+    }
+}
+
+impl convert::From<u8> for BigFixed {
+    fn from(i: u8) -> BigFixed {
+        if DIGITBYTES > 1 {
+            BigFixed::from_bytes_leu(&(i as Digit).to_le_bytes())
+        } else {
+            BigFixed::from_bytes_leu(&i.to_le_bytes())
+        }
+    }
+}
+
+impl convert::From<i16> for BigFixed {
+    fn from(i: i16) -> BigFixed {
+        if DIGITBYTES > 2 {
+            BigFixed::from_bytes_les(&(i as SignedDigit).to_le_bytes())
+        } else {
+            BigFixed::from_bytes_les(&i.to_le_bytes())
+        }
+    }
+}
+
+impl convert::From<u16> for BigFixed {
+    fn from(i: u16) -> BigFixed {
+        if DIGITBYTES > 2 {
+            BigFixed::from_bytes_leu(&(i as Digit).to_le_bytes())
+        } else {
+            BigFixed::from_bytes_leu(&i.to_le_bytes())
         }
     }
 }
 
 impl convert::From<i32> for BigFixed {
     fn from(i: i32) -> BigFixed {
-        BigFixed::from(i as i64)
-    }
-}
-
-impl convert::From<u64> for BigFixed {
-    fn from(n: u64) -> BigFixed {
-        BigFixed {
-            data: vec![n,0],
-            data_low: 0,
-            data_high: 1
+        if DIGITBYTES > 4 {
+            BigFixed::from_bytes_les(&(i as SignedDigit).to_le_bytes())
+        } else {
+            BigFixed::from_bytes_les(&i.to_le_bytes())
         }
     }
 }
 
 impl convert::From<u32> for BigFixed {
-    fn from(n: u32) -> BigFixed {
-        BigFixed::from(n as u64)
+    fn from(i: u32) -> BigFixed {
+        if DIGITBYTES > 4 {
+            BigFixed::from_bytes_leu(&(i as Digit).to_le_bytes())
+        } else {
+            BigFixed::from_bytes_leu(&i.to_le_bytes())
+        }
     }
 }
 
+impl convert::From<i64> for BigFixed {
+    fn from(i: i64) -> BigFixed {
+        if DIGITBYTES > 8 {
+            BigFixed::from_bytes_les(&(i as SignedDigit).to_le_bytes())
+        } else {
+            BigFixed::from_bytes_les(&i.to_le_bytes())
+        }
+    }
+}
+
+impl convert::From<u64> for BigFixed {
+    fn from(i: u64) -> BigFixed {
+        if DIGITBYTES > 8 {
+            BigFixed::from_bytes_leu(&(i as Digit).to_le_bytes())
+        } else {
+            BigFixed::from_bytes_leu(&i.to_le_bytes())
+        }
+    }
+}
+
+impl convert::From<i128> for BigFixed {
+    fn from(i: i128) -> BigFixed {
+        if DIGITBYTES > 16 {
+            BigFixed::from_bytes_les(&(i as SignedDigit).to_le_bytes())
+        } else {
+            BigFixed::from_bytes_les(&i.to_le_bytes())
+        }
+    }
+}
+
+impl convert::From<u128> for BigFixed {
+    fn from(i: u128) -> BigFixed {
+        if DIGITBYTES > 16 {
+            BigFixed::from_bytes_leu(&(i as Digit).to_le_bytes())
+        } else {
+            BigFixed::from_bytes_leu(&i.to_le_bytes())
+        }
+    }
+}
+/*
 impl ops::Add for BigFixed {
     type Output = BigFixed;
     fn add(self, other: BigFixed) -> BigFixed {
@@ -122,4 +238,4 @@ impl ops::Add for &BigFixed {
             data_low: low
         }
     }
-}
+}*/

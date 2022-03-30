@@ -1,4 +1,7 @@
+pub mod digit;
+
 pub mod big_fixed;
 
-pub use crate::big_fixed::BigFixed;
+pub mod big_fixed_slice;
 
+pub use crate::big_fixed::BigFixed;
