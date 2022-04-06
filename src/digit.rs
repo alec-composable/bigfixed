@@ -1,4 +1,4 @@
-// parameters to set. should be a macro?
+// parameters to set. should be a macro? const fn?
 
 /* 8 bit
 
@@ -81,36 +81,24 @@ pub const DOWNCASTMASK: Double = ALLONES as Double;
 
 pub const GREATESTBIT: Digit = 1 << (SINGLEWIDE - 1);
 
-pub fn add(a: Digit, b: Digit) -> Digit {
-    a.wrapping_add(b)
+/*
+macro_rules! add {
+    ($a: expr, $b: expr, $result: expr, $carry: expr) => {
+        let res = ($a as Double) + ($b as Double);
+        $result = res as Digit;
+        $carry = (res >> SINGLEWIDE) as Digit;
+    };
 }
 
-pub fn mul(a: Digit, b: Digit) -> Digit {
-    a.wrapping_mul(b)
+pub(crate) use add;
+*/
+
+/*macro_rules! mul {
+    ($a: expr, $b: expr, $result: expr, $carry: expr) => {
+        let res = ($a as Double) * ($b as Double);
+        $result = res as Digit;
+        $carry = (res >> SINGLEWIDE) as Digit;
+    };
 }
 
-pub fn add_overflow(a: Digit, b: Digit) -> Digit {
-    (((
-        (a as Double) + (b as Double))
-        >> SINGLEWIDE)
-        & DOWNCASTMASK)
-        as Digit
-}
-
-pub fn mul_overflow(a: Digit, b: Digit) -> Digit {
-    (((
-    (a as Double) * (b as Double)
-    ) >> SINGLEWIDE
-    ) & DOWNCASTMASK
-    ) as Digit
-}
-
-pub fn add_full(a: Digit, b: Digit) -> (Digit, Digit) {
-    let res = (a as Double) + (b as Double);
-    ((res & DOWNCASTMASK) as Digit, ((res >> SINGLEWIDE) & DOWNCASTMASK) as Digit)
-}
-
-pub fn mul_full(a: Digit, b: Digit) -> (Digit, Digit) {
-    let res = (a as Double) * (b as Double);
-    ((res & DOWNCASTMASK) as Digit, ((res >> SINGLEWIDE) & DOWNCASTMASK) as Digit)
-}
+pub(crate) use mul;*/

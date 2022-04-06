@@ -1,54 +1,123 @@
-use crate::digit::*;
+use crate::{digit::*, Tail};
 
-use std::{fmt, convert, /*, ops, cmp::{max, min}*/};
+use std::{fmt, /*cmp::{max, min}, iter*/};
 
-use num::BigUint;
+//pub mod convert;
+
+pub mod convert;
+pub mod ops;
 
 #[derive(Clone)]
 pub struct BigFixed {
-    pub data: Vec<Digit>,
+    pub head: Digit,
+    pub body: Vec<Digit>,
+    pub tail: Tail,
     pub position: isize
 }
 
 impl BigFixed {
-    pub fn from_bytes_les(bytes: &[u8]) -> BigFixed {
-        assert_eq!(bytes.len() % DIGITBYTES, 0, "byte stream must be a multiple of {}", DIGITBYTES);
-
-        // number of positions required
-        let len: usize = bytes.len() / DIGITBYTES;
-        
-        let mut data: Vec<Digit> = Vec::with_capacity(len);
-        data.extend(
-            (0..len).map(
-                |i| i * DIGITBYTES
-            ).map(
-                |j| digit_from_bytes(&bytes[j..(j+DIGITBYTES)])
-            )
-        );
-        BigFixed {
-            data: data,
-            position: 0
-        }.trim()
-    }
-
-    pub fn from_bytes_leu(bytes: &[u8]) -> BigFixed {
-        let mut padded_bytes: Vec<u8> = Vec::with_capacity(bytes.len() + DIGITBYTES);
-        padded_bytes.extend_from_slice(bytes);
-        padded_bytes.resize(bytes.len() + DIGITBYTES, 0);
-        BigFixed::from_bytes_les(&padded_bytes)
-    }
-
-    pub fn cast_unsigned(mut self) -> BigFixed {
-        if self.is_neg() {
-            self.data.push(0);
+    // remove redundant data
+    pub fn format(&mut self) {
+        // absorb body into tail
+        let mut shift = 0;
+        while self.body.len() > 0 && self.body[0] == self.tail[shift] {
+            self.body.remove(0);
+            self.position += 1;
+            shift += 1;
         }
-        self
+        self.tail.shift(-shift);
+        // collapse tail
+        self.tail.collapse();
+        // special case: bad tail
+        if self.tail.len() == 1 && self.tail[0usize] == ALLONES {
+            self.tail[0usize] = 0;
+            self.add_digit(1, self.position);
+            return;
+        }
+        // collapse body
+        while self.body.len() > 0 && self.body[self.body.len() - 1] == self.head {
+            self.body.pop();
+        }
+        // special case: zero
+        if self.head == 0 && self.body.len() == 0 && self.tail.len() == 1 && self.tail[0usize] == 0 {
+            self.position = 0;
+        }
     }
 
-    pub fn raw_get(&self, position: isize) -> Digit {
+    pub fn construct(head: Digit, body: Vec<Digit>, tail: Tail, position: isize) -> BigFixed {
+        let mut returner = BigFixed {
+            head,
+            body,
+            tail,
+            position
+        };
+        returner.format();
+        returner
+    }
+
+    // Restructure if necessary so that position is in the body region. Breaks format so reformat afterwards. Returns whether restructuring was necessary.
+    pub fn ensure_valid_position(&mut self, position: isize) -> bool {
         let shifted = position - self.position;
-        debug_assert!(shifted >= 0 && (shifted as usize) < self.data.len(), "bad position {}", position);
-        self.data[shifted as usize]
+        if shifted >= 0 {
+            let shifted = shifted as usize;
+            if shifted >= self.body.len() {
+                self.body.resize(shifted + 1, self.head);
+                true
+            } else {
+                false
+            }
+        } else {
+            let pos_shift = (-shifted) as usize;
+            let len = self.tail.len();
+            self.body.splice(0..0, self.tail.into_iter().skip(len - (pos_shift %  len)).take(pos_shift));
+            self.tail.shift(pos_shift as isize);
+            self.position = position;
+            true
+        }
+    }
+
+/*
+    // Ensure that all positions p with low <= p < high are valid. This breaks trim format! Call trim again before finishing.
+    pub fn validate_range(&mut self, low: isize, high: isize) {
+        let shift = max(0, self.position - low) as usize;
+        let lenu = self.data.len();
+        let len = lenu as isize;
+        let pad = max(0, high - (self.position + len)) as usize;
+        let grow = shift + pad;
+        if grow > 0 {
+            self.data.reserve(grow);
+        }
+        if shift > 0 {
+            self.data.splice(0..0, iter::repeat(0).take(shift));
+            self.position -= shift as isize;
+        }
+        if pad > 0 {
+            self.data.splice(lenu..lenu, iter::repeat(self.head_digit).take(pad));
+        }
+    }
+
+    pub fn position_high(&self) -> isize {
+        self.position + self.data.len() as isize
+    }
+
+    // Ensure that position is valid. Returns whether an extension was required.
+    pub fn ensure_position(&mut self, position: isize) -> bool {
+        println!("ensuring {} for {:?} {}", position, self.data, self.position);
+        // these checks are theoretically unnecessary but they avoid trivial calls to expand_range
+        if position < self.position {
+            self.expand_range(position, self.position_high());
+            true
+        } else if position >= self.position_high() {
+            self.expand_range(self.position, position);
+            true
+        } else {
+            false
+        }
+    }
+
+    pub fn set(&mut self, d: Digit, position: isize) {
+        self.ensure_position(position);
+        self.data[(position - self.position) as usize] = d;
     }
 
     pub fn greatest_digit(&self) -> Digit {
@@ -59,183 +128,83 @@ impl BigFixed {
         }
     }
 
-    pub fn trim(mut self) -> BigFixed {
-        while self.data.len() > 1 && (
-            (self.data[self.data.len() - 1] == 0 && self.data[self.data.len() - 2] < GREATESTBIT) ||
-            (self.data[self.data.len() - 1] == ALLONES && self.data[self.data.len() - 2] >= GREATESTBIT)
-        ) {
-            self.data.pop();
-        }
-        while self.data.len() > 0 && self.data[0] == 0 {
-            self.data.remove(0);
-            self.position = self.position + 1;
-        }
-        if self.data.len() == 0 {
-            self.position = 0;
-        }
-        self
-    }
-
     pub fn is_neg(&self) -> bool {
         self.greatest_digit() >= GREATESTBIT
     }
 
-    pub fn neg(&self) -> BigFixed {
-        let mut data: Vec<Digit> = self.data.iter().map(|x| x ^ ALLONES).collect();
-        let i = 0;
-        let len = self.data.len();
-        while i < len {
-            data[i] = add(data[i], 1);
-            if data[i] != 0 {break}
+    pub fn cast_unsigned(mut self) -> BigFixed {
+        if self.is_neg() {
+            self.data.push(0);
         }
-        BigFixed {
-            data: data,
-            position: self.position
-        }.trim()
+        self
     }
 
-    pub fn to_bytes(&self) -> Vec<u8> {
-        let bytes: Vec<u8> = self.data.iter().flat_map(|x| x.to_le_bytes()).collect();
-        bytes
+    pub fn cast_signed(mut self) -> BigFixed {
+        self
     }
+
+    pub fn neg(&self) -> BigFixed {
+        let mut data: Vec<Digit> = self.data.iter().map(
+            |x| x ^ ALLONES
+        ).collect();
+        let i = 0;
+        while i < self.data.len() {
+            data[i] = data[i].wrapping_add(1);
+            if data[i] != 0 {break}
+        }
+        BigFixed::construct(data, self.position, false)
+    }
+
+    pub fn abs(&self) -> BigFixed {
+        if self.is_neg() {
+            self.neg()
+        } else {
+            self.clone()
+        }
+    }
+
+    pub fn shift(&mut self, shift: isize) -> &BigFixed {
+        self.position = self.position + shift;
+        self
+    }
+
+    pub fn int_data(&self) -> &[Digit] {
+        &self.data[(min(max(0, -self.position) as usize, self.data.len()))..self.data.len()]
+    }
+
+    pub fn int(&self) -> BigFixed {
+        BigFixed::construct(
+            self.int_data().to_vec(),
+            max(0, self.position),
+            false
+        )
+    }
+
+    pub fn frac_data(&self) -> &[Digit] {
+        &self.data[0..(max(0, min(-self.position, self.data.len() as isize)) as usize)]
+    }
+
+    pub fn frac(&self) -> BigFixed {
+        BigFixed::construct(
+            self.frac_data().to_vec(),
+            0,
+            true
+        )
+    }
+
+    pub fn is_zero(&self) -> bool {
+        self.data.len() == 0
+    }
+    */
 }
+
 
 impl fmt::Display for BigFixed {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let neg = self.is_neg();
-        let bytes = if neg {self.neg().to_bytes()} else {self.to_bytes()};
-        let big = BigUint::from_bytes_le(&bytes);
-        write!(f, "{}{}, {:?}", if neg {"-"} else {""}, big, self.data)
+        let mut body_rev = self.body.clone();
+        body_rev.reverse();
+        let mut tail_rev = self.tail.data.clone();
+        tail_rev.reverse();
+        write!(f, " {} {:?}.{:?} position {}", self.head, body_rev, tail_rev, self.position)
     }
 }
-
-impl convert::From<i8> for BigFixed {
-    fn from(i: i8) -> BigFixed {
-        if DIGITBYTES > 1 {
-            BigFixed::from_bytes_les(&(i as SignedDigit).to_le_bytes())
-        } else {
-            BigFixed::from_bytes_les(&i.to_le_bytes())
-        }
-    }
-}
-
-impl convert::From<u8> for BigFixed {
-    fn from(i: u8) -> BigFixed {
-        if DIGITBYTES > 1 {
-            BigFixed::from_bytes_leu(&(i as Digit).to_le_bytes())
-        } else {
-            BigFixed::from_bytes_leu(&i.to_le_bytes())
-        }
-    }
-}
-
-impl convert::From<i16> for BigFixed {
-    fn from(i: i16) -> BigFixed {
-        if DIGITBYTES > 2 {
-            BigFixed::from_bytes_les(&(i as SignedDigit).to_le_bytes())
-        } else {
-            BigFixed::from_bytes_les(&i.to_le_bytes())
-        }
-    }
-}
-
-impl convert::From<u16> for BigFixed {
-    fn from(i: u16) -> BigFixed {
-        if DIGITBYTES > 2 {
-            BigFixed::from_bytes_leu(&(i as Digit).to_le_bytes())
-        } else {
-            BigFixed::from_bytes_leu(&i.to_le_bytes())
-        }
-    }
-}
-
-impl convert::From<i32> for BigFixed {
-    fn from(i: i32) -> BigFixed {
-        if DIGITBYTES > 4 {
-            BigFixed::from_bytes_les(&(i as SignedDigit).to_le_bytes())
-        } else {
-            BigFixed::from_bytes_les(&i.to_le_bytes())
-        }
-    }
-}
-
-impl convert::From<u32> for BigFixed {
-    fn from(i: u32) -> BigFixed {
-        if DIGITBYTES > 4 {
-            BigFixed::from_bytes_leu(&(i as Digit).to_le_bytes())
-        } else {
-            BigFixed::from_bytes_leu(&i.to_le_bytes())
-        }
-    }
-}
-
-impl convert::From<i64> for BigFixed {
-    fn from(i: i64) -> BigFixed {
-        if DIGITBYTES > 8 {
-            BigFixed::from_bytes_les(&(i as SignedDigit).to_le_bytes())
-        } else {
-            BigFixed::from_bytes_les(&i.to_le_bytes())
-        }
-    }
-}
-
-impl convert::From<u64> for BigFixed {
-    fn from(i: u64) -> BigFixed {
-        if DIGITBYTES > 8 {
-            BigFixed::from_bytes_leu(&(i as Digit).to_le_bytes())
-        } else {
-            BigFixed::from_bytes_leu(&i.to_le_bytes())
-        }
-    }
-}
-
-impl convert::From<i128> for BigFixed {
-    fn from(i: i128) -> BigFixed {
-        if DIGITBYTES > 16 {
-            BigFixed::from_bytes_les(&(i as SignedDigit).to_le_bytes())
-        } else {
-            BigFixed::from_bytes_les(&i.to_le_bytes())
-        }
-    }
-}
-
-impl convert::From<u128> for BigFixed {
-    fn from(i: u128) -> BigFixed {
-        if DIGITBYTES > 16 {
-            BigFixed::from_bytes_leu(&(i as Digit).to_le_bytes())
-        } else {
-            BigFixed::from_bytes_leu(&i.to_le_bytes())
-        }
-    }
-}
-/*
-impl ops::Add for BigFixed {
-    type Output = BigFixed;
-    fn add(self, other: BigFixed) -> BigFixed {
-        &self + &other
-    }
-}
-
-impl ops::Add for &BigFixed {
-    type Output = BigFixed;
-    fn add(self, other: &BigFixed) -> BigFixed {
-        let low = min(self.data_low, other.data_low);
-        let high = max(self.data_high, other.data_high);
-        let width = high - low;
-        // leave room for one overflow
-        let mut v = vec![0 as u64; (width + 1) as usize];
-        let mut carried: u128 = 0;
-        let mut res: u128;
-        for i in low..high {
-            res = (self.get(i) as u128) + (other.get(i) as u128) + carried;
-            carried = res >> 64;
-            v[(i-low) as usize] = (res & O64D) as u64;
-        }
-        v[width as usize] = (carried & O64D) as u64;
-        BigFixed {
-            data: v,
-            data_high: high,
-            data_low: low
-        }
-    }
-}*/
