@@ -1,25 +1,34 @@
 use crate::{digit::*, BigFixed};
 
-use std::{ops,/* cmp::{max, min}*/};
+use std::{ops, cmp::{max, min}};
+
+use num::{integer::{lcm}};
 
 impl BigFixed {
     // Add digit into position and handle carries
     pub fn add_digit(&mut self, d: Digit, position: isize) {
-        /*let mut res;
-        let mut carry;
+        let mut res;
+        let mut carry = 0;
         add!(self[position], d, res, carry);
         self[position] = res;
-        let high = self.position_high();
-        position += 1;
-        while carry == 1 && position < high {
-            add!(self.get(position), 1, res, carry);
-            self.set(res, position);
-            position += 1;
-        }*/
-        println!("adding {} pos {} to {}", d, position, self);
+        let high = self.body_high();
+        let mut on_position = position + 1;
+        while carry == 1 && on_position < high {
+            add!(self[on_position], 1, res, carry);
+            self[on_position] = res;
+            on_position += 1;
+        }
+        // overflow cases
+        if carry == 1 {
+            if self.is_neg() {
+                self.head = 0;
+            } else {
+                self[high] = 1;
+            }
+        }
     }
 }
-/*
+
 impl ops::Add for &BigFixed {
     type Output = BigFixed;
     fn add(self, other: &BigFixed) -> BigFixed {
@@ -31,16 +40,58 @@ impl ops::Add for &BigFixed {
 
 impl ops::AddAssign<&BigFixed> for BigFixed {
     fn add_assign(&mut self, other: &BigFixed) {
-        let low = min(self.position, other.position);
-        // one extra in case of carry
-        let high = max(self.position_high(), other.position_high()) + 1;
-        self.expand_range(low, high);
-        for position in low..high {
-            self.add_digit(other.get(position), position);
+        //println!("starting {}", self);
+        // align self valid range
+        let position = min(self.position, other.position);
+        let high = max(self.body_high(), other.body_high());
+        self.ensure_valid_range(position, high);
+        //println!("aligned {}", self);
+
+        // add heads
+        self.head ^= other.head;
+        //println!("added head {}", self);
+
+        // add tails
+        let tail_len = lcm(self.tail.len(), other.tail.len());
+        self.tail.resize(tail_len);
+        let tail_low = self.position - tail_len as isize;
+        let mut res;
+        let mut carry = 0;
+        for i in 0..tail_len {
+            add!(self.tail[i], carry, res);
+            self.tail[i] = res;
+            carry = 0;
+            add!(self.tail[i], other[tail_low + i as isize], res, carry);
+            self.tail[i] = res;
         }
+        if carry == 1 {
+            self.add_digit(1, self.position);
+            for carry_in_tail in 0..tail_len {
+                if carry == 0 {break;}
+                add!(self.tail[carry_in_tail], 1, res, carry);
+                self.tail[carry_in_tail] = res;
+            }
+        }
+        debug_assert_eq!(carry, 0);
+        println!("added tail {}", self);
+
+        // add bodies
+        for in_body in 0..self.body.len() {
+            add!(self.body[in_body], carry, res);
+            self.body[in_body] = res;
+            carry = 0;
+            add!(self.body[in_body], other[position + in_body as isize], res, carry);
+            self.body[in_body] = res;
+        }
+        if carry == 1 {
+            self.add_digit(1, high);
+        }
+        println!("added body {}", self);
+
+        self.format();
     }
 }
-
+/*
 impl ops::BitAnd for &BigFixed {
     type Output = BigFixed;
     fn bitand(self, other: &BigFixed) -> BigFixed {
@@ -120,7 +171,6 @@ impl ops::Index<isize> for BigFixed {
         } else if shifted >= 0 {
             &self.body[position as usize]
         } else {
-            println!("shifted {} position {} val {}", shifted, position, self.tail[shifted]);
             &self.tail[shifted]
         }
     }

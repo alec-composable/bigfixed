@@ -1,6 +1,6 @@
 use crate::{digit::*, Tail};
 
-use std::{fmt, /*cmp::{max, min}, iter*/};
+use std::{fmt, ops as sops /*cmp::{max, min}, iter*/};
 
 //pub mod convert;
 
@@ -32,7 +32,8 @@ impl BigFixed {
         if self.tail.len() == 1 && self.tail[0usize] == ALLONES {
             self.tail[0usize] = 0;
             self.add_digit(1, self.position);
-            return;
+            // tail changed, start over
+            return self.format();
         }
         // collapse body
         while self.body.len() > 0 && self.body[self.body.len() - 1] == self.head {
@@ -55,94 +56,65 @@ impl BigFixed {
         returner
     }
 
-    // Restructure if necessary so that position is in the body region. Breaks format so reformat afterwards. Returns whether restructuring was necessary.
-    pub fn ensure_valid_position(&mut self, position: isize) -> bool {
-        let shifted = position - self.position;
-        if shifted >= 0 {
-            let shifted = shifted as usize;
-            if shifted >= self.body.len() {
-                self.body.resize(shifted + 1, self.head);
-                true
-            } else {
-                false
-            }
+    // Restructure if necessary so that all positions in low..=high are valid. Breaks format so reformat afterwards. Returns whether restructuring was necessary.
+    pub fn ensure_valid_range(&mut self, low: isize, high: isize) -> bool {
+        if low < high {
+            return self.ensure_valid_range(high, low);
+        }
+        let shifted_low = low - self.position;
+        let shifted_high = high - self.position;
+        let increase_high;
+        let increase_low;
+        let mut reserve = 0;
+        if shifted_high >= self.body.len() as isize {
+                //self.body.resize(shifted_high as usize + 1, self.head);
+                reserve = shifted_high as usize + 1;
+                increase_high = true;
         } else {
-            let pos_shift = (-shifted) as usize;
-            let len = self.tail.len();
-            self.body.splice(0..0, self.tail.into_iter().skip(len - (pos_shift %  len)).take(pos_shift));
-            self.tail.shift(pos_shift as isize);
-            self.position = position;
-            true
+            increase_high = false;
         }
-    }
-
-/*
-    // Ensure that all positions p with low <= p < high are valid. This breaks trim format! Call trim again before finishing.
-    pub fn validate_range(&mut self, low: isize, high: isize) {
-        let shift = max(0, self.position - low) as usize;
-        let lenu = self.data.len();
-        let len = lenu as isize;
-        let pad = max(0, high - (self.position + len)) as usize;
-        let grow = shift + pad;
-        if grow > 0 {
-            self.data.reserve(grow);
+        if shifted_low < 0 {
+            reserve += (-shifted_low) as usize;
+            increase_low = true;
+        } else {
+            increase_low = false;
         }
-        if shift > 0 {
-            self.data.splice(0..0, iter::repeat(0).take(shift));
-            self.position -= shift as isize;
-        }
-        if pad > 0 {
-            self.data.splice(lenu..lenu, iter::repeat(self.head_digit).take(pad));
-        }
-    }
-
-    pub fn position_high(&self) -> isize {
-        self.position + self.data.len() as isize
-    }
-
-    // Ensure that position is valid. Returns whether an extension was required.
-    pub fn ensure_position(&mut self, position: isize) -> bool {
-        println!("ensuring {} for {:?} {}", position, self.data, self.position);
-        // these checks are theoretically unnecessary but they avoid trivial calls to expand_range
-        if position < self.position {
-            self.expand_range(position, self.position_high());
-            true
-        } else if position >= self.position_high() {
-            self.expand_range(self.position, position);
+        if reserve > 0 {
+            self.body.reserve(reserve);
+            if increase_low {
+                let pos_shift = (-shifted_low) as usize;
+                let len = self.tail.len();
+                self.body.splice(0..0, self.tail.into_iter().skip(len - (pos_shift % len)).take(pos_shift));
+                self.tail.shift(pos_shift as isize);
+                self.position = low;
+            }
+            if increase_high {
+                self.body.resize(shifted_high as usize + 1, self.head);
+            }
             true
         } else {
             false
         }
     }
 
-    pub fn set(&mut self, d: Digit, position: isize) {
-        self.ensure_position(position);
-        self.data[(position - self.position) as usize] = d;
-    }
-
-    pub fn greatest_digit(&self) -> Digit {
-        if self.data.len() > 0 {
-            self.data[self.data.len() - 1]
-        } else {
-            0
-        }
+    // same as ensure_valid_range where range is position..=position
+    pub fn ensure_valid_position(&mut self, position: isize) -> bool {
+        self.ensure_valid_range(position, position)
     }
 
     pub fn is_neg(&self) -> bool {
-        self.greatest_digit() >= GREATESTBIT
+        self.head == ALLONES
     }
 
-    pub fn cast_unsigned(mut self) -> BigFixed {
-        if self.is_neg() {
-            self.data.push(0);
-        }
-        self
+    pub fn body_high(&self) -> isize {
+        self.position + self.body.len() as isize
     }
 
-    pub fn cast_signed(mut self) -> BigFixed {
-        self
+    pub fn valid_range(&self) -> sops::Range<isize> {
+        self.position..self.body_high()
     }
 
+/*
     pub fn neg(&self) -> BigFixed {
         let mut data: Vec<Digit> = self.data.iter().map(
             |x| x ^ ALLONES
@@ -166,34 +138,6 @@ impl BigFixed {
     pub fn shift(&mut self, shift: isize) -> &BigFixed {
         self.position = self.position + shift;
         self
-    }
-
-    pub fn int_data(&self) -> &[Digit] {
-        &self.data[(min(max(0, -self.position) as usize, self.data.len()))..self.data.len()]
-    }
-
-    pub fn int(&self) -> BigFixed {
-        BigFixed::construct(
-            self.int_data().to_vec(),
-            max(0, self.position),
-            false
-        )
-    }
-
-    pub fn frac_data(&self) -> &[Digit] {
-        &self.data[0..(max(0, min(-self.position, self.data.len() as isize)) as usize)]
-    }
-
-    pub fn frac(&self) -> BigFixed {
-        BigFixed::construct(
-            self.frac_data().to_vec(),
-            0,
-            true
-        )
-    }
-
-    pub fn is_zero(&self) -> bool {
-        self.data.len() == 0
     }
     */
 }
