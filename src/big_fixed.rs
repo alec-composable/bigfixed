@@ -1,6 +1,6 @@
 use crate::{digit::*, Tail};
 
-use std::{fmt, ops as sops /*cmp::{max, min}, iter*/};
+use std::{fmt, ops as stdops /*cmp::{max, min}, iter*/};
 
 //pub mod convert;
 
@@ -18,6 +18,12 @@ pub struct BigFixed {
 impl BigFixed {
     // remove redundant data
     pub fn format(&mut self) {
+        // collapse into head
+        while self.body.len() > 0 && self.body[self.body.len() - 1] == self.head {
+            self.body.pop();
+        }
+        // collapse tail
+        self.tail.collapse();
         // absorb body into tail
         let mut shift = 0;
         while self.body.len() > 0 && self.body[0] == self.tail[shift] {
@@ -25,23 +31,30 @@ impl BigFixed {
             self.position += 1;
             shift += 1;
         }
+        // head-tail interactions
+        if self.body.len() == 0 {
+            let tail_len = self.tail.len() as isize;
+            if tail_len == 1 {
+                // special case: zero
+                if self.head == 0 && self.tail[0usize] == 0 {
+                    self.position = 0;
+                    return;
+                }
+            } else {
+                // absorb head into tail
+                while shift < tail_len && self.head == self.tail[-(shift + 1)] {
+                    shift += 1;
+                    self.position -= 1;
+                }
+            }
+        }
         self.tail.shift(-shift);
-        // collapse tail
-        self.tail.collapse();
         // special case: bad tail
         if self.tail.len() == 1 && self.tail[0usize] == ALLONES {
             self.tail[0usize] = 0;
             self.add_digit(1, self.position);
             // tail changed, start over
             return self.format();
-        }
-        // collapse body
-        while self.body.len() > 0 && self.body[self.body.len() - 1] == self.head {
-            self.body.pop();
-        }
-        // special case: zero
-        if self.head == 0 && self.body.len() == 0 && self.tail.len() == 1 && self.tail[0usize] == 0 {
-            self.position = 0;
         }
     }
 
@@ -56,19 +69,22 @@ impl BigFixed {
         returner
     }
 
-    // Restructure if necessary so that all positions in low..=high are valid. Breaks format so reformat afterwards. Returns whether restructuring was necessary.
+    // Restructure if necessary so that all positions in low..high are valid. Breaks format so reformat afterwards. Returns whether restructuring was necessary.
     pub fn ensure_valid_range(&mut self, low: isize, high: isize) -> bool {
-        if low < high {
-            return self.ensure_valid_range(high, low);
+        if low >= high {
+            if low == high {
+                return false;
+            } else {
+                return self.ensure_valid_range(high, low);
+            }
         }
         let shifted_low = low - self.position;
         let shifted_high = high - self.position;
         let increase_high;
         let increase_low;
         let mut reserve = 0;
-        if shifted_high >= self.body.len() as isize {
-                //self.body.resize(shifted_high as usize + 1, self.head);
-                reserve = shifted_high as usize + 1;
+        if shifted_high > self.body.len() as isize {
+                reserve = (shifted_high - self.body.len() as isize) as usize;
                 increase_high = true;
         } else {
             increase_high = false;
@@ -89,7 +105,7 @@ impl BigFixed {
                 self.position = low;
             }
             if increase_high {
-                self.body.resize(shifted_high as usize + 1, self.head);
+                self.body.resize(shifted_high as usize, self.head);
             }
             true
         } else {
@@ -99,7 +115,7 @@ impl BigFixed {
 
     // same as ensure_valid_range where range is position..=position
     pub fn ensure_valid_position(&mut self, position: isize) -> bool {
-        self.ensure_valid_range(position, position)
+        self.ensure_valid_range(position, position + 1)
     }
 
     pub fn is_neg(&self) -> bool {
@@ -110,7 +126,7 @@ impl BigFixed {
         self.position + self.body.len() as isize
     }
 
-    pub fn valid_range(&self) -> sops::Range<isize> {
+    pub fn valid_range(&self) -> stdops::Range<isize> {
         self.position..self.body_high()
     }
 

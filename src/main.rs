@@ -1,13 +1,17 @@
 use numbers::digit::*;
-//use numbers::Tail;
+use numbers::Tail;
 use numbers::BigFixed;
+
+use fastrand;
 
 pub fn main() {
     let a = BigFixed::from(1);
-    let b = BigFixed::from(ALLONES);
-    println!("a {}", a);
-    println!("b {}", b);
-    println!("a + b {}", &a + &b);
+    let b = a.clone();
+    println!("{}", a + &b);
+}
+
+pub fn rand() -> BigFixed {
+    BigFixed::from(fastrand::i128(..))
 }
 
 pub fn bit_test() {
@@ -41,4 +45,16 @@ pub fn bit_test() {
     println!("u128 0 {}", BigFixed::from(0u128));
     println!("u128 1 {}", BigFixed::from(1u128));
     println!("u128 -1 {}", BigFixed::from(-1i128 as u128));
+}
+
+pub fn trivial_digit() -> Digit {
+    0
+}
+
+pub fn trivial_tail() -> Tail {
+    Tail::from(vec![0])
+}
+
+pub fn trivial_bigfixed() -> BigFixed {
+    BigFixed::from(0)
 }

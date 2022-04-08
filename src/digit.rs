@@ -73,19 +73,19 @@ pub fn digit_from_bytes(bytes: &[u8]) -> Digit {
 
 // done with parameters
 
-pub const SINGLEWIDE: usize = 8 * DIGITBYTES;
+pub const DIGITBITS: usize = 8 * DIGITBYTES;
 
 pub const ALLONES: Digit = (-1 as SignedDigit) as Digit;
 
 pub const DOWNCASTMASK: Double = ALLONES as Double;
 
-pub const GREATESTBIT: Digit = 1 << (SINGLEWIDE - 1);
+pub const GREATESTBIT: Digit = 1 << (DIGITBITS - 1);
 
 macro_rules! add {
     ($a: expr, $b: expr, $result: expr, $carry: expr) => {
         let res = ($a as Double) + ($b as Double);
         $result = res as Digit;
-        $carry += (res >> SINGLEWIDE) as Digit;
+        $carry += (res >> DIGITBITS) as Digit;
     };
     ($a: expr, $b: expr, $result: expr) => {
         let res = ($a as Double) + ($b as Double);
@@ -99,7 +99,7 @@ pub(crate) use add;
     ($a: expr, $b: expr, $result: expr, $carry: expr) => {
         let res = ($a as Double) * ($b as Double);
         $result = res as Digit;
-        $carry += (res >> SINGLEWIDE) as Digit;
+        $carry += (res >> DIGITBITS) as Digit;
     };
     ($a: expr, $b: expr, $result: expr) => {
         let res = ($a as Double) * ($b as Double);
