@@ -126,6 +126,10 @@ impl BigFixed {
         self.position + self.body.len() as isize
     }
 
+    pub fn tail_low(&self) -> isize {
+        self.position - self.tail.len() as isize
+    }
+
     pub fn valid_range(&self) -> stdops::Range<isize> {
         self.position..self.body_high()
     }

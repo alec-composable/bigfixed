@@ -5,9 +5,9 @@ use numbers::BigFixed;
 use fastrand;
 
 pub fn main() {
-    let a = BigFixed::from(1);
-    let b = a.clone();
-    println!("{}", a + &b);
+    let a = BigFixed::from(-1);
+    let b = BigFixed::from(-2);
+    println!("{} >= {} {}", a, b, a >= b);
 }
 
 pub fn rand() -> BigFixed {

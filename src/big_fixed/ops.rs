@@ -1,6 +1,6 @@
 use crate::{digit::*, Tail, BigFixed};
 
-use std::{ops::*, cmp::{max, min}};
+use std::{ops::*, cmp::*, option::*};
 
 use num::{integer::{lcm}};
 
@@ -360,3 +360,36 @@ op_extension!(Not, not, BigFixed);
 op_extension!(Shl, ShlAssign, shl, shl_assign, BigFixed, usize);
 op_extension!(Shr, ShrAssign, shr, shr_assign, BigFixed, usize);
 op_extension!(Sub, SubAssign, sub, sub_assign, BigFixed, BigFixed);
+
+impl PartialEq for BigFixed {
+    fn eq(&self, other: &BigFixed) -> bool {
+        self.position == other.position &&
+        self.head == other.head &&
+        self.body.len() == other.body.len() &&
+        self.tail.len() == other.tail.len() &&
+        self.body == other.body &&
+        self.tail.data == other.tail.data
+    }
+}
+
+impl Eq for &BigFixed {}
+
+impl PartialOrd for BigFixed {
+    fn partial_cmp(&self, other: &BigFixed) -> Option<Ordering> {
+        let mut step_result = self.head.cmp(&other.head);
+        match step_result {
+            Ordering::Equal => {
+                for i in (min(self.tail_low(), other.tail_low())..max(self.body_high(), other.body_high())).rev() {
+                    step_result = self[i].cmp(&other[i]);
+                    match step_result {
+                        Ordering::Equal => continue,
+                        x => return Some(x)
+                    }
+                }
+                Some(Ordering::Equal)
+            },
+            Ordering::Less => Some(Ordering::Greater),
+            Ordering::Greater => Some(Ordering::Less)
+        }
+    }
+}
