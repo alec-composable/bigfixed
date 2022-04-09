@@ -28,6 +28,18 @@ impl BigFixed {
             }
         }
     }
+
+    // mutate in place to negative
+    pub fn negate(&mut self) {
+        self.head = !self.head;
+        for i in 0..self.body.len() {
+            self.body[i] = !self.body[i];
+        }
+        for i in 0..self.tail.len() {
+            self.tail[i] = !self.tail[i];
+        }
+        self.format();
+    }
 }
 
 /*
@@ -293,9 +305,9 @@ impl ShlAssign<&usize> for BigFixed {
         let subshift = amount % DIGITBITS;
         self.position += places as isize;
         if subshift > 0 {
-            let opsubshift = DIGITBITS - subshift;
-            let keepmask = ALLONES >> opsubshift;
+            let keepmask = ALLONES >> subshift;
             let carrymask = !keepmask;
+            let opsubshift = DIGITBITS - subshift;
             let high = self.body_high();
             self.ensure_valid_position(high);
             for i in (1..self.body.len()).rev() {

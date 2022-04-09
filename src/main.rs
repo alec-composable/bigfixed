@@ -5,9 +5,9 @@ use numbers::BigFixed;
 use fastrand;
 
 pub fn main() {
-    let a = BigFixed::from(-1);
-    let b = BigFixed::from(-2);
-    println!("{} >= {} {}", a, b, a >= b);
+    let f = 1f32;
+    println!("{} {:?}", f, f.to_bits().to_be_bytes());
+    println!("{}", BigFixed::from(f));
 }
 
 pub fn rand() -> BigFixed {

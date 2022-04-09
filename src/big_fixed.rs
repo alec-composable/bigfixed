@@ -1,6 +1,6 @@
 use crate::{digit::*, Tail};
 
-use std::{fmt, ops as stdops /*cmp::{max, min}, iter*/};
+use std::{fmt, ops as stdops, cmp::{max, min}, iter::*};
 
 //pub mod convert;
 
@@ -134,32 +134,38 @@ impl BigFixed {
         self.position..self.body_high()
     }
 
-/*
-    pub fn neg(&self) -> BigFixed {
-        let mut data: Vec<Digit> = self.data.iter().map(
-            |x| x ^ ALLONES
-        ).collect();
-        let i = 0;
-        while i < self.data.len() {
-            data[i] = data[i].wrapping_add(1);
-            if data[i] != 0 {break}
+    pub fn int(&self) -> BigFixed {
+        let high = self.body_high();
+        let mut body = Vec::with_capacity(max(high, 0) as usize);
+        for i in 0..high {
+            body.push(self[i]);
         }
-        BigFixed::construct(data, self.position, false)
+        BigFixed::construct(
+            self.head,
+            body,
+            Tail::zero(),
+            0
+        )
     }
 
-    pub fn abs(&self) -> BigFixed {
-        if self.is_neg() {
-            self.neg()
-        } else {
-            self.clone()
+    pub fn frac(&self) -> BigFixed {
+        let mut body = Vec::with_capacity(max(0, -self.position) as usize);
+        let cutoff = min(self.position, 0);
+        for i in cutoff..0 {
+            body.push(self[i]);
         }
+        let tail_len = self.tail.len();
+        let mut tail = Vec::with_capacity(tail_len);
+        for i in 0..tail_len as isize {
+            tail.push(self.tail[cutoff + i]);
+        }
+        BigFixed::construct(
+            0,
+            body,
+            Tail::from(tail),
+            cutoff
+        )
     }
-
-    pub fn shift(&mut self, shift: isize) -> &BigFixed {
-        self.position = self.position + shift;
-        self
-    }
-    */
 }
 
 

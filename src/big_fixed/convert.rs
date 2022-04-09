@@ -37,10 +37,35 @@ impl BigFixed {
             0
         )
     }
+
+    // load float into a BigFixed as an unsigned integer with identical bits then call this to interpret it correctly
+    // float format: [0][sign bit][exponent + bias][significand].[0]
+    pub fn float_from_bits(mut self, exponent_len: usize, exponent_bias: isize, significand_len: usize) -> BigFixed {
+        assert!(!self.is_neg(), "improper float format");
+        assert!(self.frac() == BigFixed::from(0u8), "improper float format");
+        self >>= exponent_len + significand_len;
+        let is_neg = self[0] == 1;
+        self[0] = 0;
+        self <<= exponent_len;
+        let exp = <usize>::from(&self) as isize - exponent_bias;
+        for i in 0..self.body_high() {
+            self[i as isize] = 0;
+        }
+        self[0] = 1;
+        if exp < 0 {
+            self >>= (-exp) as usize;
+        } else {
+            self <<= exp as usize;
+        }
+        if is_neg {
+            self.negate();
+        }
+        self
+    }
 }
 
 macro_rules! from_signed_int {
-    ($s: ty, $n: literal) => {
+    ($s: ty, $n: expr) => {
         impl convert::From<$s> for BigFixed {
             fn from(i: $s) -> BigFixed {
                 if DIGITBYTES > $n {
@@ -54,10 +79,10 @@ macro_rules! from_signed_int {
 }
 
 macro_rules! from_unsigned_int {
-    ($u: ty, $n: literal) => {
+    ($u: ty, $num_bytes: expr) => {
         impl convert::From<$u> for BigFixed {
             fn from(u: $u) -> BigFixed {
-                if DIGITBYTES > $n {
+                if DIGITBYTES > $num_bytes {
                     BigFixed::int_from_bytes(&(u as SignedDigit).to_le_bytes() as &[u8], true)
                 } else {
                     BigFixed::int_from_bytes(&u.to_le_bytes() as &[u8], true)
@@ -67,6 +92,10 @@ macro_rules! from_unsigned_int {
     };
 }
 
+const SIZEBYTES: usize = (isize::BITS / 8) as usize;
+
+from_signed_int!(isize, SIZEBYTES);
+from_unsigned_int!(usize, SIZEBYTES);
 from_signed_int!(i8, 1);
 from_unsigned_int!(u8, 1);
 from_signed_int!(i16, 2);
@@ -77,3 +106,51 @@ from_signed_int!(i64, 8);
 from_unsigned_int!(u64, 8);
 from_signed_int!(i128, 16);
 from_unsigned_int!(u128, 16);
+
+macro_rules! to_unsigned_int {
+    ($int: ty, $num_bytes: expr) => {
+        impl convert::From<&BigFixed> for $int {
+            fn from(x: &BigFixed) -> $int {
+                if DIGITBYTES > $num_bytes {
+                    let mut bytes = [0u8; $num_bytes];
+                    let d = x[0].to_le_bytes();
+                    for i in 0..$num_bytes {
+                        bytes[i] = d[i];
+                    }
+                    <$int>::from_le_bytes(bytes)
+                } else {
+                    let mut bytes = [0u8; $num_bytes];
+                    let mut on = 0;
+                    for i in 0..($num_bytes / DIGITBYTES) {
+                        let d = x[i as isize].to_le_bytes();
+                        for j in 0..DIGITBYTES {
+                            bytes[on] = d[j];
+                            on += 1;
+                        }
+                    }
+                    <$int>::from_le_bytes(bytes)
+                }
+            }
+        }
+    };
+}
+
+to_unsigned_int!(usize, SIZEBYTES);
+to_unsigned_int!(u8, 1);
+to_unsigned_int!(u16, 2);
+to_unsigned_int!(u32, 4);
+to_unsigned_int!(u64, 8);
+to_unsigned_int!(u128, 16);
+
+macro_rules! from_float {
+    ($type: ty, $exponent_len: expr, $exponent_bias: expr, $significand_len: expr) => {
+        impl convert::From<$type> for BigFixed {
+            fn from(x: $type) -> BigFixed {
+                BigFixed::from(x.to_bits()).float_from_bits($exponent_len, $exponent_bias, $significand_len)
+            }
+        }
+    };
+}
+
+from_float!(f32, 8, 127, 23);
+from_float!(f64, 11, 1023, 52);

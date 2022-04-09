@@ -52,6 +52,10 @@ impl Tail {
             }
         }
     }
+
+    pub fn zero() -> Tail {
+        Tail::from(vec![0])
+    }
 }
 
 pub struct TailIterator<'a> {
