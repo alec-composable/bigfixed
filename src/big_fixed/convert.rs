@@ -1,4 +1,4 @@
-use crate::{digit::*, Tail, BigFixed};
+use crate::{digit::*, BigFixed};
 
 use std::{convert};
 
@@ -33,7 +33,6 @@ impl BigFixed {
         BigFixed::construct(
             if is_neg {ALLONES} else {0},
             data,
-            Tail::from(vec![0]),
             0
         )
     }
@@ -92,7 +91,7 @@ macro_rules! from_unsigned_int {
     };
 }
 
-const SIZEBYTES: usize = (isize::BITS / 8) as usize;
+const SIZEBYTES: usize = (usize::BITS / 8) as usize;
 
 from_signed_int!(isize, SIZEBYTES);
 from_unsigned_int!(usize, SIZEBYTES);

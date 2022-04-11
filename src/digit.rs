@@ -85,7 +85,7 @@ macro_rules! add {
     ($a: expr, $b: expr, $result: expr, $carry: expr) => {
         let res = ($a as Double) + ($b as Double);
         $result = res as Digit;
-        $carry += (res >> DIGITBITS) as Digit;
+        $carry = (res >> DIGITBITS) as Digit;
     };
     ($a: expr, $b: expr, $result: expr) => {
         let res = ($a as Double) + ($b as Double);
@@ -95,11 +95,11 @@ macro_rules! add {
 
 pub(crate) use add;
 
-/*macro_rules! mul {
+macro_rules! mul {
     ($a: expr, $b: expr, $result: expr, $carry: expr) => {
         let res = ($a as Double) * ($b as Double);
         $result = res as Digit;
-        $carry += (res >> DIGITBITS) as Digit;
+        $carry = (res >> DIGITBITS) as Digit;
     };
     ($a: expr, $b: expr, $result: expr) => {
         let res = ($a as Double) * ($b as Double);
@@ -107,4 +107,4 @@ pub(crate) use add;
     };
 }
 
-pub(crate) use mul;*/
+pub(crate) use mul;

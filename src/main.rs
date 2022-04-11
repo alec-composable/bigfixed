@@ -1,13 +1,12 @@
 use numbers::digit::*;
-use numbers::Tail;
 use numbers::BigFixed;
 
 use fastrand;
 
 pub fn main() {
-    let f = 1f32;
-    println!("{} {:?}", f, f.to_bits().to_be_bytes());
-    println!("{}", BigFixed::from(f));
+    let a = BigFixed::from(1);
+    let b = BigFixed::from(-1);
+    println!("{}", &a * &b);
 }
 
 pub fn rand() -> BigFixed {
@@ -49,10 +48,6 @@ pub fn bit_test() {
 
 pub fn trivial_digit() -> Digit {
     0
-}
-
-pub fn trivial_tail() -> Tail {
-    Tail::from(vec![0])
 }
 
 pub fn trivial_bigfixed() -> BigFixed {

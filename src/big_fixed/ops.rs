@@ -1,20 +1,17 @@
-use crate::{digit::*, Tail, BigFixed};
+use crate::{digit::*, BigFixed};
 
 use std::{ops::*, cmp::*, option::*};
-
-use num::{integer::{lcm}};
 
 impl BigFixed {
     // Add digit into position and handle carries
     pub fn add_digit(&mut self, d: Digit, position: isize) {
         let mut res;
-        let mut carry = 0;
+        let mut carry;
         add!(self[position], d, res, carry);
         self[position] = res;
         let high = self.body_high();
         let mut on_position = position + 1;
         while carry == 1 && on_position < high {
-            carry = 0;
             add!(self[on_position], 1, res, carry);
             self[on_position] = res;
             on_position += 1;
@@ -29,15 +26,31 @@ impl BigFixed {
         }
     }
 
+    pub fn add_digit_drop_overflow(&mut self, d: Digit, position: isize) {
+        if position >= self.body_high() {
+            // already overflows
+            return;
+        }
+        let mut res;
+        let mut carry;
+        add!(self[position], d, res, carry);
+        self[position] = res;
+        let high = self.body_high();
+        let mut on_position = position + 1;
+        while carry == 1 && on_position < high {
+            add!(self[on_position], 1, res, carry);
+            self[on_position] = res;
+            on_position += 1;
+        }
+    }
+
     // mutate in place to negative
     pub fn negate(&mut self) {
         self.head = !self.head;
         for i in 0..self.body.len() {
             self.body[i] = !self.body[i];
         }
-        for i in 0..self.tail.len() {
-            self.tail[i] = !self.tail[i];
-        }
+        self.add_digit(1, self.position);
         self.format();
     }
 }
@@ -118,51 +131,31 @@ impl AddAssign<&BigFixed> for BigFixed {
         // align self valid range
         let position = min(self.position, other.position);
         let high = max(self.body_high(), other.body_high());
-        self.ensure_valid_range(position, high);
+        // one extra in case of overflow
+        self.ensure_valid_range(position, high + 1);
         
         // add heads
         self.head ^= other.head;
-        
-        // add tails
-        let tail_len = lcm(self.tail.len(), other.tail.len());
-        let tail_low = self.position - tail_len as isize;
-        self.tail.resize(tail_len);
+
         let mut res;
         let mut carry = 0;
-        let mut previous_carry;
-        for i in 0..tail_len {
-            previous_carry = carry;
-            carry = 0;
-            add!(self.tail[i], previous_carry, res, carry);
-            self.tail[i] = res;
-            add!(self.tail[i], other[tail_low + i as isize], res, carry);
-            self.tail[i] = res;
-        }
-        if carry == 1 {
-            self.add_digit(1, self.position);
-            for carry_in_tail in 0..tail_len {
-                previous_carry = carry;
-                carry = 0;
-                add!(self.tail[carry_in_tail], previous_carry, res, carry);
-                self.tail[carry_in_tail] = res;
-                if carry == 0 {break};
-            }
-        }
-        debug_assert_eq!(carry, 0, "double carry");
-        
+        let mut prev_carry;
         // add bodies
         for in_body in 0..self.body.len() {
-            add!(self.body[in_body], carry, res);
+            prev_carry = carry;
+            add!(self.body[in_body], prev_carry, res, carry);
             self.body[in_body] = res;
-            carry = 0;
-            add!(self.body[in_body], other[self.position + in_body as isize], res, carry);
+            // overloading prev_carry
+            add!(self.body[in_body], other[self.position + in_body as isize], res, prev_carry);
             self.body[in_body] = res;
+            carry += prev_carry;
         }
         if carry == 1 {
             if self.is_neg() {
                 self.head = 0;
             } else {
-                self.add_digit(1, self.body_high());
+                // overflow
+                self[high] = 1;
             }
         }
         
@@ -176,13 +169,6 @@ impl BitAndAssign<&BigFixed> for BigFixed {
         let position = min(self.position, other.position);
         let high = max(self.body_high(), other.body_high());
         self.ensure_valid_range(position, high);
-
-        let tail_len = lcm(self.tail.len(), other.tail.len());
-        let tail_low = self.position - tail_len as isize;
-        self.tail.resize(tail_len);
-        for i in 0..tail_len {
-            self.tail[i] &= other[tail_low + i as isize];
-        }
 
         for i in 0..self.body.len() {
             self.body[i] &= other[self.position + i as isize];
@@ -199,13 +185,6 @@ impl BitOrAssign<&BigFixed> for BigFixed {
         let high = max(self.body_high(), other.body_high());
         self.ensure_valid_range(position, high);
 
-        let tail_len = lcm(self.tail.len(), other.tail.len());
-        let tail_low = self.position - tail_len as isize;
-        self.tail.resize(tail_len);
-        for i in 0..tail_len {
-            self.tail[i] |= other[tail_low + i as isize];
-        }
-
         for i in 0..self.body.len() {
             self.body[i] |= other[self.position + i as isize];
         }
@@ -220,13 +199,6 @@ impl BitXorAssign<&BigFixed> for BigFixed {
         let position = min(self.position, other.position);
         let high = max(self.body_high(), other.body_high());
         self.ensure_valid_range(position, high);
-
-        let tail_len = lcm(self.tail.len(), other.tail.len());
-        let tail_low = self.position - tail_len as isize;
-        self.tail.resize(tail_len);
-        for i in 0..tail_len {
-            self.tail[i] ^= other[tail_low + i as isize];
-        }
 
         for i in 0..self.body.len() {
             self.body[i] ^= other[self.position + i as isize];
@@ -255,7 +227,7 @@ impl Index<isize> for BigFixed {
         } else if shifted >= 0 {
             &self.body[shifted as usize]
         } else {
-            &self.tail[shifted]
+            &0
         }
     }
 }
@@ -267,14 +239,40 @@ impl IndexMut<isize> for BigFixed {
     }
 }
 
-/*
-Mul
-
-The multiplication operator *.
-MulAssign
-
-The multiplication assignment operator *=.
-*/
+impl MulAssign<&BigFixed> for BigFixed {
+    fn mul_assign(&mut self, other: &BigFixed) {
+        println!("multiplying {} x {}", self, other);
+        let mut result = BigFixed::from(0 as Digit);
+        let low = self.position + other.position;
+        result.position = low;
+        let mut self_len = self.body.len() as isize;
+        // numbers like -1 (-2^k) have empty bodies
+        if self.is_neg() {
+            self_len += 1;
+        }
+        let mut other_len = other.body.len() as isize;
+        if other.is_neg() {
+            other_len += 1;
+        }
+        let len = max(self_len, other_len);
+        let high = low + 2*len;
+        result.ensure_valid_range(low, high);
+        let mut sum_position;
+        let mut prod_res: Digit;
+        let mut prod_carry: Digit;
+        for i in self.position..high as isize {
+            for j in other.position..max(other.position, high - i) as isize {
+                sum_position = i + j;
+                mul!(self[i], other[j], prod_res, prod_carry);
+                result.add_digit_drop_overflow(prod_res, sum_position);
+                result.add_digit_drop_overflow(prod_carry, sum_position + 1);
+            }
+        }
+        result.head = self.head ^ other.head;
+        result.format();
+        self.overwrite(result);
+    }
+}
 
 impl Neg for &BigFixed {
     type Output = BigFixed;
@@ -286,18 +284,15 @@ impl Neg for &BigFixed {
 impl Not for &BigFixed {
     type Output = BigFixed;
     fn not(self) -> BigFixed {
-        BigFixed::construct(
-            !self.head,
-            self.body.iter().map(|x| !x).collect(),
-            Tail::from(self.tail.data.iter().map(|x| !x).collect::<Vec<Digit>>()),
-            self.position
-        )
+        let mut res = self.clone();
+        res.negate();
+        res
     }
 }
 
-// RangeBounds under construction... May end up being something different
+// RangeBounds does not apply to individual BigFixeds
 
-// Rem and RemAssign are trivial since division is perfect but we can implement them anyway once division is done
+// Rem and RemAssign depend on division
 
 impl ShlAssign<&usize> for BigFixed {
     fn shl_assign(&mut self, amount: &usize) {
@@ -315,14 +310,7 @@ impl ShlAssign<&usize> for BigFixed {
                     ((self.body[i] & keepmask) << subshift)
                     | ((self.body[i-1] & carrymask) >> opsubshift);
             }
-            self.body[0] = ((self.body[0] & keepmask) << subshift) | ((self.tail[self.tail.len() - 1] & carrymask) >> opsubshift);
-            let old_high = self.tail[-1];
-            for i in (1..self.tail.len() as isize).rev() {
-                self.tail[i] =
-                    ((self.tail[i] & keepmask) << subshift)
-                    | ((self.tail[i-1] & carrymask) >> opsubshift);
-            }
-            self.tail[0] = ((self.tail[0] & keepmask) << subshift) | ((old_high & carrymask) >> opsubshift);
+            self.body[0] = (self.body[0] & keepmask) << subshift;
             self.format();
         }
     }
@@ -345,13 +333,6 @@ impl ShrAssign<&usize> for BigFixed {
             }
             let high = self.body.len() - 1;
             self.body[high] = ((self.body[high] & keepmask) >> subshift) | ((self.head & carrymask) << opsubshift);
-            let old_low = self.tail[0];
-            for i in 1..self.tail.len() as isize {
-                self.tail[i-1] =
-                    ((self.tail[i-1] & keepmask) >> subshift)
-                    | ((self.tail[i] & carrymask) << opsubshift);
-            }
-            self.tail[-1] = ((self.tail[-1] & keepmask) >> subshift) | ((old_low & carrymask) << opsubshift);
             self.format();
         }
     }
@@ -367,6 +348,7 @@ op_extension!(Add, AddAssign, add, add_assign, BigFixed, BigFixed);
 op_extension!(BitAnd, BitAndAssign, bitand, bitand_assign, BigFixed, BigFixed);
 op_extension!(BitOr, BitOrAssign, bitor, bitor_assign, BigFixed, BigFixed);
 op_extension!(BitXor, BitXorAssign, bitxor, bitxor_assign, BigFixed, BigFixed);
+op_extension!(Mul, MulAssign, mul, mul_assign, BigFixed, BigFixed);
 op_extension!(Neg, neg, BigFixed);
 op_extension!(Not, not, BigFixed);
 op_extension!(Shl, ShlAssign, shl, shl_assign, BigFixed, usize);
@@ -378,9 +360,7 @@ impl PartialEq for BigFixed {
         self.position == other.position &&
         self.head == other.head &&
         self.body.len() == other.body.len() &&
-        self.tail.len() == other.tail.len() &&
-        self.body == other.body &&
-        self.tail.data == other.tail.data
+        self.body == other.body
     }
 }
 
@@ -391,7 +371,7 @@ impl PartialOrd for BigFixed {
         let mut step_result = self.head.cmp(&other.head);
         match step_result {
             Ordering::Equal => {
-                for i in (min(self.tail_low(), other.tail_low())..max(self.body_high(), other.body_high())).rev() {
+                for i in (min(self.position, other.position)..max(self.body_high(), other.body_high())).rev() {
                     step_result = self[i].cmp(&other[i]);
                     match step_result {
                         Ordering::Equal => continue,

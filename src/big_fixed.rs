@@ -1,4 +1,4 @@
-use crate::{digit::*, Tail};
+use crate::{digit::*};
 
 use std::{fmt, ops as stdops, cmp::{max, min}, iter::*};
 
@@ -11,58 +11,29 @@ pub mod ops;
 pub struct BigFixed {
     pub head: Digit,
     pub body: Vec<Digit>,
-    pub tail: Tail,
     pub position: isize
 }
 
 impl BigFixed {
     // remove redundant data
     pub fn format(&mut self) {
-        // collapse into head
         while self.body.len() > 0 && self.body[self.body.len() - 1] == self.head {
             self.body.pop();
         }
-        // collapse tail
-        self.tail.collapse();
-        // absorb body into tail
-        let mut shift = 0;
-        while self.body.len() > 0 && self.body[0] == self.tail[shift] {
+        while self.body.len() > 0 && self.body[0] == 0 {
             self.body.remove(0);
             self.position += 1;
-            shift += 1;
         }
-        // head-tail interactions
-        if self.body.len() == 0 {
-            let tail_len = self.tail.len() as isize;
-            if tail_len == 1 {
-                // special case: zero
-                if self.head == 0 && self.tail[0usize] == 0 {
-                    self.position = 0;
-                    return;
-                }
-            } else {
-                // absorb head into tail
-                while shift < tail_len && self.head == self.tail[-(shift + 1)] {
-                    shift += 1;
-                    self.position -= 1;
-                }
-            }
-        }
-        self.tail.shift(-shift);
-        // special case: bad tail
-        if self.tail.len() == 1 && self.tail[0usize] == ALLONES {
-            self.tail[0usize] = 0;
-            self.add_digit(1, self.position);
-            // tail changed, start over
-            return self.format();
+        // special case: zero
+        if self.head == 0 && self.body.len() == 0 {
+            self.position = 0;
         }
     }
 
-    pub fn construct(head: Digit, body: Vec<Digit>, tail: Tail, position: isize) -> BigFixed {
+    pub fn construct(head: Digit, body: Vec<Digit>, position: isize) -> BigFixed {
         let mut returner = BigFixed {
             head,
             body,
-            tail,
             position
         };
         returner.format();
@@ -79,32 +50,25 @@ impl BigFixed {
             }
         }
         let shifted_low = low - self.position;
-        let shifted_high = high - self.position;
-        let increase_high;
-        let increase_low;
         let mut reserve = 0;
-        if shifted_high > self.body.len() as isize {
-                reserve = (shifted_high - self.body.len() as isize) as usize;
-                increase_high = true;
-        } else {
-            increase_high = false;
-        }
+        // splice and resize
         if shifted_low < 0 {
-            reserve += (-shifted_low) as usize;
-            increase_low = true;
-        } else {
-            increase_low = false;
+            //self.body.splice(0..0, repeat(0).take((-shifted_low) as usize)); -- call later so we can reallocate at most once
+            reserve = (-shifted_low) as usize;
+            self.position = low;
+        }
+        let shifted_high = high - self.position;
+        let body_len = self.body.len() as isize;
+        if shifted_high > body_len {
+            // self.body.resize(shifted_high as usize, self.head); -- call later so we can reallocate at most once
+            reserve += (shifted_high - body_len) as usize;
         }
         if reserve > 0 {
             self.body.reserve(reserve);
-            if increase_low {
-                let pos_shift = (-shifted_low) as usize;
-                let len = self.tail.len();
-                self.body.splice(0..0, self.tail.into_iter().skip(len - (pos_shift % len)).take(pos_shift));
-                self.tail.shift(pos_shift as isize);
-                self.position = low;
+            if shifted_low < 0 {
+                self.body.splice(0..0, repeat(0).take((-shifted_low) as usize));
             }
-            if increase_high {
+            if shifted_high > body_len {
                 self.body.resize(shifted_high as usize, self.head);
             }
             true
@@ -122,12 +86,9 @@ impl BigFixed {
         self.head == ALLONES
     }
 
+    // the least position which is outside of the range contained in body
     pub fn body_high(&self) -> isize {
         self.position + self.body.len() as isize
-    }
-
-    pub fn tail_low(&self) -> isize {
-        self.position - self.tail.len() as isize
     }
 
     pub fn valid_range(&self) -> stdops::Range<isize> {
@@ -143,7 +104,6 @@ impl BigFixed {
         BigFixed::construct(
             self.head,
             body,
-            Tail::zero(),
             0
         )
     }
@@ -154,17 +114,22 @@ impl BigFixed {
         for i in cutoff..0 {
             body.push(self[i]);
         }
-        let tail_len = self.tail.len();
-        let mut tail = Vec::with_capacity(tail_len);
-        for i in 0..tail_len as isize {
-            tail.push(self.tail[cutoff + i]);
-        }
         BigFixed::construct(
             0,
             body,
-            Tail::from(tail),
             cutoff
         )
+    }
+
+    pub fn overwrite(&mut self, src: BigFixed) {
+        self.head = src.head;
+        self.body = src.body;
+        self.position = src.position;
+    }
+
+    pub fn shift(mut self, shift: isize) -> BigFixed {
+        self.position += shift;
+        self
     }
 }
 
@@ -173,8 +138,6 @@ impl fmt::Display for BigFixed {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let mut body_rev = self.body.clone();
         body_rev.reverse();
-        let mut tail_rev = self.tail.data.clone();
-        tail_rev.reverse();
-        write!(f, " {} {:?}.{:?} position {}", self.head, body_rev, tail_rev, self.position)
+        write!(f, " {} {:?} position {}", self.head, body_rev, self.position)
     }
 }
