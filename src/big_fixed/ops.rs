@@ -241,12 +241,10 @@ impl IndexMut<isize> for BigFixed {
 
 impl MulAssign<&BigFixed> for BigFixed {
     fn mul_assign(&mut self, other: &BigFixed) {
-        println!("multiplying {} x {}", self, other);
         let mut result = BigFixed::from(0 as Digit);
         let low = self.position + other.position;
         result.position = low;
         let mut self_len = self.body.len() as isize;
-        // numbers like -1 (-2^k) have empty bodies
         if self.is_neg() {
             self_len += 1;
         }
@@ -254,14 +252,16 @@ impl MulAssign<&BigFixed> for BigFixed {
         if other.is_neg() {
             other_len += 1;
         }
-        let len = max(self_len, other_len);
-        let high = low + 2*len;
+        let len = 2*max(self_len, other_len);
+        let high = low + len;
         result.ensure_valid_range(low, high);
+        let self_high = self.position + len;
+        let other_high = other.position + len;
         let mut sum_position;
         let mut prod_res: Digit;
         let mut prod_carry: Digit;
-        for i in self.position..high as isize {
-            for j in other.position..max(other.position, high - i) as isize {
+        for i in self.position..self_high {
+            for j in other.position..other_high {
                 sum_position = i + j;
                 mul!(self[i], other[j], prod_res, prod_carry);
                 result.add_digit_drop_overflow(prod_res, sum_position);

@@ -4,8 +4,9 @@ use numbers::BigFixed;
 use fastrand;
 
 pub fn main() {
-    let a = BigFixed::from(1);
-    let b = BigFixed::from(-1);
+    let shift = 60;
+    let a = BigFixed::from(-65535).shift(shift);
+    let b = BigFixed::from(65535).shift(-shift);
     println!("{}", &a * &b);
 }
 
