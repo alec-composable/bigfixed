@@ -6,8 +6,4 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-num = "0.4"
-num-traits = "0.2"
-num-bigint = "0.4.3"
 fastrand = "1.7"
-paste = "1.0"

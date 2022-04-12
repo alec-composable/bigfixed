@@ -1,6 +1,6 @@
 use crate::{digit::*};
 
-use std::{fmt, ops as stdops, cmp::{max, min}, iter::*};
+use std::{fmt, ops as stdops, cmp::{max}, iter::{repeat}};
 
 //pub mod convert;
 
@@ -17,12 +17,18 @@ pub struct BigFixed {
 impl BigFixed {
     // remove redundant data
     pub fn format(&mut self) {
-        while self.body.len() > 0 && self.body[self.body.len() - 1] == self.head {
-            self.body.pop();
+        let mut high = self.body.len();
+        while high > 0 && self.body[high - 1] == self.head {
+            high -= 1;
         }
-        while self.body.len() > 0 && self.body[0] == 0 {
-            self.body.remove(0);
-            self.position += 1;
+        self.body.truncate(high);
+        if self.body.len() > 0 {
+            let mut low = 0;
+            while self.body[low] == 0 {
+                low += 1;
+            }
+            self.body.drain(0..low);
+            self.position += low as isize;
         }
         // special case: zero
         if self.head == 0 && self.body.len() == 0 {
@@ -53,14 +59,12 @@ impl BigFixed {
         let mut reserve = 0;
         // splice and resize
         if shifted_low < 0 {
-            //self.body.splice(0..0, repeat(0).take((-shifted_low) as usize)); -- call later so we can reallocate at most once
             reserve = (-shifted_low) as usize;
             self.position = low;
         }
         let shifted_high = high - self.position;
         let body_len = self.body.len() as isize;
         if shifted_high > body_len {
-            // self.body.resize(shifted_high as usize, self.head); -- call later so we can reallocate at most once
             reserve += (shifted_high - body_len) as usize;
         }
         if reserve > 0 {
@@ -96,28 +100,18 @@ impl BigFixed {
     }
 
     pub fn int(&self) -> BigFixed {
-        let high = self.body_high();
-        let mut body = Vec::with_capacity(max(high, 0) as usize);
-        for i in 0..high {
-            body.push(self[i]);
-        }
         BigFixed::construct(
             self.head,
-            body,
-            0
+            self.body[(max(0, -self.position) as usize)..self.body.len()].to_vec(),
+            max(0, self.position)
         )
     }
 
     pub fn frac(&self) -> BigFixed {
-        let mut body = Vec::with_capacity(max(0, -self.position) as usize);
-        let cutoff = min(self.position, 0);
-        for i in cutoff..0 {
-            body.push(self[i]);
-        }
         BigFixed::construct(
             0,
-            body,
-            cutoff
+            self.body[0..(max(0, -self.position) as usize)].to_vec(),
+            self.position // if position is positive then body must be empty and format() resets position to 0
         )
     }
 

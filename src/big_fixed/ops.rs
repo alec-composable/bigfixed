@@ -241,7 +241,7 @@ impl IndexMut<isize> for BigFixed {
 
 impl MulAssign<&BigFixed> for BigFixed {
     fn mul_assign(&mut self, other: &BigFixed) {
-        // have to check 0 anyway because of -0 issues, might as well check at the top
+        // have to check for 0 anyway because of -0 issues, might as well check at the top
         if self.is_zero() {
             return;
         }
