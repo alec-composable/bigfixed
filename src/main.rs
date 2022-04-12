@@ -4,10 +4,15 @@ use numbers::BigFixed;
 use fastrand;
 
 pub fn main() {
-    let shift = 60;
-    let a = BigFixed::from(-65535).shift(shift);
-    let b = BigFixed::from(65535).shift(-shift);
-    println!("{}", &a * &b);
+    for _i in 0..1000000 {
+        let shift = fastrand::isize(..) / 2;
+        let a = fastrand::i16(..) as i32;
+        let b = fastrand::i16(..) as i32;
+        let x = BigFixed::from(a).shift(shift);
+        let y = BigFixed::from(b).shift(-shift);
+        assert_eq!(BigFixed::from(a * b), &x * &y, "a {} {} b {} {} ab {} {} {}", a, x, b, y, a*b, BigFixed::from(a * b), &x * &y);
+    }
+    println!("all done");
 }
 
 pub fn rand() -> BigFixed {

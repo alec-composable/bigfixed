@@ -241,36 +241,59 @@ impl IndexMut<isize> for BigFixed {
 
 impl MulAssign<&BigFixed> for BigFixed {
     fn mul_assign(&mut self, other: &BigFixed) {
-        let mut result = BigFixed::from(0 as Digit);
+        // have to check 0 anyway because of -0 issues, might as well check at the top
+        if self.is_zero() {
+            return;
+        }
+        if other.is_zero() {
+            self.head = 0;
+            self.body.drain(0..self.body.len());
+            self.format();
+            return;
+        }
         let low = self.position + other.position;
-        result.position = low;
-        let mut self_len = self.body.len() as isize;
+        self.position = 0;
+        let mut self_len = self.body.len();
         if self.is_neg() {
             self_len += 1;
         }
-        let mut other_len = other.body.len() as isize;
+        let mut other_len = other.body.len();
         if other.is_neg() {
             other_len += 1;
         }
         let len = 2*max(self_len, other_len);
-        let high = low + len;
-        result.ensure_valid_range(low, high);
-        let self_high = self.position + len;
-        let other_high = other.position + len;
-        let mut sum_position;
-        let mut prod_res: Digit;
-        let mut prod_carry: Digit;
-        for i in self.position..self_high {
-            for j in other.position..other_high {
-                sum_position = i + j;
-                mul!(self[i], other[j], prod_res, prod_carry);
-                result.add_digit_drop_overflow(prod_res, sum_position);
-                result.add_digit_drop_overflow(prod_carry, sum_position + 1);
+        self.body.resize(len, self.head);
+        let mut other_base;
+        let mut prod_res;
+        let mut prod_carry;
+        let mut sum_res;
+        let mut sum_carry;
+        let mut total_carry;
+        let mut summ_res;
+        let mut summ_carry;
+        let mut totall_carry;
+        for i in (0..len).rev() {
+            sum_res = 0;
+            total_carry = 0;
+            summ_res = 0;
+            totall_carry = 0;
+            for j in 0..=i {
+                other_base = other.position + i as isize;
+                mul!(self.body[j], other[other_base - j as isize], prod_res, prod_carry);
+                add!(sum_res, prod_res, sum_res, sum_carry);
+                total_carry += sum_carry;
+                add!(summ_res, prod_carry, summ_res, summ_carry);
+                totall_carry += summ_carry;
             }
+            self.body[i] = 0;
+            self.add_digit_drop_overflow(sum_res, i as isize);
+            self.add_digit_drop_overflow(total_carry, i as isize + 1);
+            self.add_digit_drop_overflow(summ_res, i as isize + 1);
+            self.add_digit_drop_overflow(totall_carry, i as isize + 2);
         }
-        result.head = self.head ^ other.head;
-        result.format();
-        self.overwrite(result);
+        self.head = self.head ^ other.head;
+        self.position = low;
+        self.format();
     }
 }
 

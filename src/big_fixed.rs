@@ -121,20 +121,34 @@ impl BigFixed {
         )
     }
 
-    pub fn overwrite(&mut self, src: BigFixed) {
+    pub fn overwrite(&mut self, src: &BigFixed) {
         self.head = src.head;
-        self.body = src.body;
+        self.body.splice(0..self.body.len(), src.body.iter().map(|x| *x));
         self.position = src.position;
     }
 
     pub fn shift(mut self, shift: isize) -> BigFixed {
-        self.position += shift;
+        if !self.is_zero() {
+            self.position += shift;
+        }
         self
+    }
+
+    pub fn is_zero(&self) -> bool {
+        self.head == 0 && self.body.iter().all(|x| *x == 0)
     }
 }
 
 
 impl fmt::Display for BigFixed {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let mut body_rev = self.body.clone();
+        body_rev.reverse();
+        write!(f, " {} {:?} position {}", self.head, body_rev, self.position)
+    }
+}
+
+impl fmt::Debug for BigFixed {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let mut body_rev = self.body.clone();
         body_rev.reverse();
