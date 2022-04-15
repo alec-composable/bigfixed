@@ -3,9 +3,7 @@ use numbers::{digit::*, Index, BigFixed};
 use fastrand;
 
 pub fn main() {
-    let a = BigFixed::from(-1);
-    let b = BigFixed::from(-1);
-    println!("{} x {} = {}", a, b, &a * &b);
+    bit_test();
 }
 
 pub fn rand() -> BigFixed {
