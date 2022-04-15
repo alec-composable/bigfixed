@@ -2,7 +2,7 @@
 
 A BigFixed is a fixed point number designed for arithmetic with rational numbers. BigFixed is a complementary positional arithmetic system with base `Digit` being one of the native unsigned integer types `u*` (except the maximal `u128`). For an overview of the theory behind BigFixed see the included document.
 
-Indexing is done using the Index type. It combines isize and usize along with Infty (with a boolean sign) for unified indexing. Technically it just uses isize, rejecting usize values which are too large and asserting nonnegativity when converting to usize.
+Indexing is done using the Index type. It combines isize and usize for unified indexing. Technically it just uses isize, rejecting usize values which are too large and asserting nonnegativity when converting to usize.
 
 The components of a BigFixed are
 
