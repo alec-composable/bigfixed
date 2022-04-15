@@ -1,20 +1,20 @@
-use crate::{digit::*, BigFixed};
+use crate::{digit::*, Index as Indx, BigFixed, op_assign_to_op, unary};
 
 use std::{ops::*, cmp::*, option::*};
 
 impl BigFixed {
     // Add digit into position and handle carries
-    pub fn add_digit(&mut self, d: Digit, position: isize) {
+    pub fn add_digit(&mut self, d: Digit, position: Indx) {
         let mut res;
         let mut carry;
         add!(self[position], d, res, carry);
         self[position] = res;
         let high = self.body_high();
-        let mut on_position = position + 1;
+        let mut on_position = position + 1isize;
         while carry == 1 && on_position < high {
             add!(self[on_position], 1, res, carry);
             self[on_position] = res;
-            on_position += 1;
+            on_position += 1isize;
         }
         // overflow cases
         if carry == 1 {
@@ -26,7 +26,7 @@ impl BigFixed {
         }
     }
 
-    pub fn add_digit_drop_overflow(&mut self, d: Digit, position: isize) {
+    pub fn add_digit_drop_overflow(&mut self, d: Digit, position: Indx) {
         if position >= self.body_high() {
             // already overflows
             return;
@@ -36,11 +36,11 @@ impl BigFixed {
         add!(self[position], d, res, carry);
         self[position] = res;
         let high = self.body_high();
-        let mut on_position = position + 1;
+        let mut on_position = position + 1isize;
         while carry == 1 && on_position < high {
             add!(self[on_position], 1, res, carry);
             self[on_position] = res;
-            on_position += 1;
+            on_position += 1isize;
         }
     }
 
@@ -55,84 +55,13 @@ impl BigFixed {
     }
 }
 
-/*
-    This macro is for extending operations to various combinations of owned/referenced objects. Everything can work using only references but sometimes
-    the code can be made to look cleaner by omitting explicit references if possible. Assume we have constructed op_assign on references, i.e.
-     -- impl $op_assign<&$other_type> for $self_type {
-     --     fn $op_assign_fn_name(&mut self, other: &$other_type) {...}
-     -- }
-
-     That is, if `a` is a self_type and `b` is an other_type then `a.op_assign_fn_name(&b)` makes sense. This macro extends the functionality to
-     -- a.op_assign_fn_name(b)
-     -- (&a).op_fn_name(&b)
-     -- (&a).op_fn_name(b)
-     -- a.op_fn_name(&b)
-     -- a.op_fn_name(b)
-    by fiddling with reference creation.
-*/
-
-macro_rules! op_extension {
-    ($op: ident, $op_assign: ident, $op_fn_name: ident, $op_assign_fn_name: ident, $self_type: ty, $other_type: ty) => {
-        impl $op_assign<$other_type> for $self_type {
-            fn $op_assign_fn_name(&mut self, other: $other_type) {
-                self.$op_assign_fn_name(&other);
-            }
-        }
-        impl $op<&$other_type> for &$self_type {
-            type Output = $self_type;
-            fn $op_fn_name(self, other: &$other_type) -> $self_type {
-                use $op_assign;
-                let mut res = self.clone();
-                res.$op_assign_fn_name(other);
-                res
-            }
-        }
-        impl $op<$other_type> for &$self_type {
-            type Output = $self_type;
-            fn $op_fn_name(self, other: $other_type) -> $self_type {
-                use $op_assign;
-                let mut res = self.clone();
-                res.$op_assign_fn_name(other);
-                res
-            }
-        }
-        impl $op<&$other_type> for $self_type {
-            type Output = $self_type;
-            fn $op_fn_name(self, other: &$other_type) -> $self_type {
-                use $op_assign;
-                let mut res = self.clone();
-                res.$op_assign_fn_name(other);
-                res
-            }
-        }
-        impl $op<$other_type> for $self_type {
-            type Output = $self_type;
-            fn $op_fn_name(self, other: $other_type) -> $self_type {
-                use $op_assign;
-                let mut res = self.clone();
-                res.$op_assign_fn_name(other);
-                res
-            }
-        }
-    };
-    // unary operation version
-    ($op: path, $op_fn_name: ident, $self_type: ty) => {
-        impl $op for $self_type {
-            type Output = $self_type;
-            fn $op_fn_name(self) -> $self_type {
-                (&self).$op_fn_name()
-            }
-        }
-    };
-}
-
 impl AddAssign<&BigFixed> for BigFixed {
     fn add_assign(&mut self, other: &BigFixed) {
         // align self valid range
         let position = min(self.position, other.position);
         let high = max(self.body_high(), other.body_high());
         // one extra in case of overflow
-        self.ensure_valid_range(position, high + 1);
+        self.ensure_valid_range(position, high + 1isize);
         
         // add heads
         self.head ^= other.head;
@@ -218,24 +147,31 @@ impl BitXorAssign<&BigFixed> for BigFixed {
 
 // Fn* -- not relevant
 
-impl Index<isize> for BigFixed {
+impl Index<Indx> for BigFixed {
     type Output = Digit;
-    fn index(&self, position: isize) -> &Digit {
+    fn index(&self, position: Indx) -> &Digit {
         let shifted = position - self.position;
         if shifted >= self.body.len() as isize {
             &self.head
-        } else if shifted >= 0 {
-            &self.body[shifted as usize]
+        } else if shifted >= 0isize {
+            &self.body[usize::from(shifted)]
         } else {
             &0
         }
     }
 }
 
-impl IndexMut<isize> for BigFixed {
-    fn index_mut(&mut self, position: isize) -> &mut Digit {
+impl Index<isize> for BigFixed {
+    type Output = Digit;
+    fn index(&self, position: isize) -> &Digit {
+        &self[Indx::from(position)]
+    }
+}
+
+impl IndexMut<Indx> for BigFixed {
+    fn index_mut(&mut self, position: Indx) -> &mut Digit {
         self.ensure_valid_position(position);
-        self.body.index_mut((position - self.position) as usize)
+        self.body.index_mut(usize::from(position - self.position))
     }
 }
 
@@ -252,7 +188,7 @@ impl MulAssign<&BigFixed> for BigFixed {
             return;
         }
         let low = self.position + other.position;
-        self.position = 0;
+        self.position = Indx::ZERO;
         let mut self_len = self.body.len();
         if self.is_neg() {
             self_len += 1;
@@ -286,10 +222,10 @@ impl MulAssign<&BigFixed> for BigFixed {
                 totall_carry += summ_carry;
             }
             self.body[i] = 0;
-            self.add_digit_drop_overflow(sum_res, i as isize);
-            self.add_digit_drop_overflow(total_carry, i as isize + 1);
-            self.add_digit_drop_overflow(summ_res, i as isize + 1);
-            self.add_digit_drop_overflow(totall_carry, i as isize + 2);
+            self.add_digit_drop_overflow(sum_res, Indx::from(i));
+            self.add_digit_drop_overflow(total_carry, Indx::from(i + 1));
+            self.add_digit_drop_overflow(summ_res, Indx::from(i + 1));
+            self.add_digit_drop_overflow(totall_carry, Indx::from(i + 2));
         }
         self.head = self.head ^ other.head;
         self.position = low;
@@ -348,7 +284,7 @@ impl ShrAssign<&usize> for BigFixed {
             let opsubshift = DIGITBITS - subshift;
             let carrymask = ALLONES >> opsubshift;
             let keepmask = !carrymask;
-            self.ensure_valid_position(self.position - 1);
+            self.ensure_valid_position(self.position - 1isize);
             for i in 1..self.body.len() {
                 self.body[i-1] =
                     ((self.body[i-1] & keepmask) >> subshift)
@@ -367,16 +303,16 @@ impl SubAssign<&BigFixed> for BigFixed {
     }
 }
 
-op_extension!(Add, AddAssign, add, add_assign, BigFixed, BigFixed);
-op_extension!(BitAnd, BitAndAssign, bitand, bitand_assign, BigFixed, BigFixed);
-op_extension!(BitOr, BitOrAssign, bitor, bitor_assign, BigFixed, BigFixed);
-op_extension!(BitXor, BitXorAssign, bitxor, bitxor_assign, BigFixed, BigFixed);
-op_extension!(Mul, MulAssign, mul, mul_assign, BigFixed, BigFixed);
-op_extension!(Neg, neg, BigFixed);
-op_extension!(Not, not, BigFixed);
-op_extension!(Shl, ShlAssign, shl, shl_assign, BigFixed, usize);
-op_extension!(Shr, ShrAssign, shr, shr_assign, BigFixed, usize);
-op_extension!(Sub, SubAssign, sub, sub_assign, BigFixed, BigFixed);
+op_assign_to_op!(Add, add, AddAssign, add_assign, BigFixed, BigFixed);
+op_assign_to_op!(BitAnd, bitand, BitAndAssign, bitand_assign, BigFixed, BigFixed);
+op_assign_to_op!(BitOr, bitor, BitOrAssign, bitor_assign, BigFixed, BigFixed);
+op_assign_to_op!(BitXor, bitxor, BitXorAssign, bitxor_assign, BigFixed, BigFixed);
+op_assign_to_op!(Mul, mul, MulAssign, mul_assign, BigFixed, BigFixed);
+unary!(Neg, neg, BigFixed);
+unary!(Not, not, BigFixed);
+op_assign_to_op!(Shl, shl, ShlAssign, shl_assign, BigFixed, usize);
+op_assign_to_op!(Shr, shr, ShrAssign, shr_assign, BigFixed, usize);
+op_assign_to_op!(Sub, sub, SubAssign, sub_assign, BigFixed, BigFixed);
 
 impl PartialEq for BigFixed {
     fn eq(&self, other: &BigFixed) -> bool {
@@ -394,7 +330,11 @@ impl PartialOrd for BigFixed {
         let mut step_result = self.head.cmp(&other.head);
         match step_result {
             Ordering::Equal => {
-                for i in (min(self.position, other.position)..max(self.body_high(), other.body_high())).rev() {
+                for i in (
+                    min(self.position, other.position).to(
+                        &max(self.body_high(), other.body_high())
+                    )
+                ).rev() {
                     step_result = self[i].cmp(&other[i]);
                     match step_result {
                         Ordering::Equal => continue,

@@ -1,21 +1,11 @@
-use numbers::digit::*;
-use numbers::BigFixed;
+use numbers::{digit::*, Index, BigFixed};
 
 use fastrand;
 
 pub fn main() {
-    for _i in 0..100000 {
-        let shift = fastrand::isize(..) / 2;
-        let a = fastrand::i16(..) as i32;
-        let b = fastrand::i16(..) as i32;
-        let x = BigFixed::from(a).shift(shift);
-        let y = BigFixed::from(b).shift(-shift);
-        assert_eq!(
-            <i64>::from(&BigFixed::from(a * b)),
-            <i64>::from(&(&x * &y)),
-            "a {} {} b {} {} ab {} {} {}", a, x, b, y, a*b, BigFixed::from(a * b), &x * &y);
-    }
-    println!("all done");
+    let a = BigFixed::from(-1);
+    let b = BigFixed::from(-1);
+    println!("{} x {} = {}", a, b, &a * &b);
 }
 
 pub fn rand() -> BigFixed {
@@ -55,8 +45,14 @@ pub fn bit_test() {
     println!("u128\t-1\t{}", BigFixed::from(-1i128 as u128));
 }
 
+// to get the compiler to shut up about unused imports
+
 pub fn trivial_digit() -> Digit {
     0
+}
+
+pub fn trivial_index() -> Index {
+    Index::ZERO
 }
 
 pub fn trivial_bigfixed() -> BigFixed {

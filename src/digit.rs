@@ -22,6 +22,7 @@ macro_rules! build_digit {
                 Digit::from_le_bytes(bytes.try_into().unwrap())
             }
             
+            #[macro_export]
             macro_rules! add {
                 ($a: expr, $b: expr, $result: expr, $carry: expr) => {
                     let res = ($a as DoubleDigit) + ($b as DoubleDigit);
@@ -36,6 +37,7 @@ macro_rules! build_digit {
             
             pub(crate) use add;
             
+            #[macro_export]
             macro_rules! mul {
                 ($a: expr, $b: expr, $result: expr, $carry: expr) => {
                     let res = ($a as DoubleDigit) * ($b as DoubleDigit);

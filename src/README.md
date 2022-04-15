@@ -1,22 +1,42 @@
 # BigFixed
 
-A BigFixed is an arbitrary precision fixed point number designed for arbitrary precision arithmetic. BigFixed is a two's complement positional arithmetic system with base `Digit` being one of the native unsigned integer types `u*` (except the maximal `u128`). Little endian positional order is used throughout. For an overview of the theory behind BigFixed see the included document.
+A BigFixed is a fixed point number designed for arithmetic with rational numbers. BigFixed is a complementary positional arithmetic system with base `Digit` being one of the native unsigned integer types `u*` (except the maximal `u128`). For an overview of the theory behind BigFixed see the included document.
 
-The components of a single BigFixed are
+Indexing is done using the Index type. It combines isize and usize along with Infty (with a boolean sign) for unified indexing. Technically it just uses isize, rejecting usize values which are too large and asserting nonnegativity when converting to usize.
+
+The components of a BigFixed are
 
 ```
-- data: Vec<Digit>
-- position: isize
+- head: Digit
+- body: Vec<Digit>
+- position: Index
+- precision: Index
 ```
 
-*Do not construct a BigFixed directly* -- Use `BigFixed::construct` or any of the `BigFixed::from` converters instead. Some operations such as equality do not work if data is not trimmed.
+*Do not construct a BigFixed directly* -- Use `BigFixed::construct` or any of the `BigFixed::from` converters if possible. There is a proper format (no redundant data in body, pure zero has no position, etc.) which some operations rely upon and which the constuctors ensure. The converters are self explanatory and `BigFixed::construct` simply constructs directly and then formats the result before releasing it.
 
-Data contains the nontrivial coefficients of the positional expansion stored in little endian order. Trivial coefficients are 0s in the tail and either 0s or -1s (as Digit) in the head depending on the sign of the BigFixed. Position is the weight of the least significant datum `data[0]`.
+Together head and body represent a sequence of digits in little endian order with the head repeating to positive infinite weight. Position and precision relate to the radix weight of the number and the tailing 0s after the body. Specifically `position` is the weight of the least body entry (or the least copy of `head` if the body is empty) and precision declares how many 0s are specified after this position. A precision of `None` means infinite precision (pure number) and a position of `None` only applies to pure zero.
 
-The fraction part of a BigFixed is all the coefficients with negative weight. The integer part is all the coefficients with nonnegative weight. Either part can be cast to a BigInt. The integer part is equivalent to the floor. Alternatively data can itself be cast to a BigInt, though this does not consider position.
+Though not actually implemented by this code, for the sake of example take DIGIT to be modular arithmetic base ten. Then ALLONES is the number 9 and the resulting positional arithmetic is the familiar Hindu-Arabian decimal system. In this example the pure integer 1 is represented by
 
-BigFixeds can be constructed from any pair `(i,d)` where `i` is a BigInt and `d` is a BigUint. Integral BigFixeds can be constructed from any of the native integer types `u*`, `i*`. Any native floating point type `f*` can be converted to a BigFixed.
+```
+BigFixed {
+    head: 0,
+    body: [1],
+    position: 0,
+    precision: None
+}
+```
 
-BigFixed supports most of the arithmetic operations in `std::ops` with some caveats:
+The number -150.00 is
 
-- Division must be given a precision parameter
+```
+BigFixed {
+    head: 9,
+    body: [8, 5],
+    position: 1,
+    precision: Some(3)
+}
+```
+
+The number zero is special: The head is 0 and the body is empty. Position only makes sense if there is a precision; either both are present or both are not.
