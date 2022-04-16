@@ -1,9 +1,23 @@
-use numbers::{digit::*, Index, BigFixed};
+use numbers::{digit::*, Index, Cutoff, CutsOff, BigFixed};
 
 use fastrand;
 
 pub fn main() {
-    bit_test();
+    let mut a = BigFixed::from(1125912791875585u64);
+    a.head = ALLONES;
+    a.position = 1isize.into();
+    println!("{}", a);
+    for i in -3..7isize {
+        for j in -1..6isize {
+            let mut b = a.clone();
+            let cutoff = Cutoff{
+                fixed: if i == -3 {None} else {Some(Index::from(i))},
+                floating: if j == -1 {None} else {Some(Index::from(j))}
+            };
+            b.cutoff(cutoff);
+            println!("{}\t{}", cutoff, b);
+        }
+    }
 }
 
 pub fn rand() -> BigFixed {

@@ -1,4 +1,4 @@
-use crate::{digit::*, Index as Indx, BigFixed, op_assign_to_op, unary};
+use crate::{digit::*, Index as Indx, Cutoff, CutsOff, BigFixed, op_assign_to_op, unary};
 
 use std::{ops::*, cmp::*, option::*};
 
@@ -183,8 +183,7 @@ impl MulAssign<&BigFixed> for BigFixed {
         }
         if other.is_zero() {
             self.head = 0;
-            self.body.drain(0..self.body.len());
-            self.format();
+            self.cutoff(Cutoff::from((self.body_high(), Indx::ZERO)));
             return;
         }
         let low = self.position + other.position;

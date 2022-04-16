@@ -1,6 +1,6 @@
-use crate::{digit::*, Index};
+use crate::{digit::*, Index, Cutoff, CutsOff};
 
-use std::{fmt, ops as stdops, iter::{repeat}};
+use std::{fmt, ops as stdops, iter::{repeat}, cmp::{min}};
 
 pub mod ops;
 pub mod convert;
@@ -127,10 +127,44 @@ impl BigFixed {
     }
 
     pub fn is_zero(&self) -> bool {
-        self.head == 0 && self.body.iter().all(|x| *x == 0)
+        self.head == 0 && self.body.iter().all(|&x| x == 0)
     }
 }
 
+impl CutsOff for BigFixed {
+    fn cutoff(&mut self, cutoff: Cutoff) {
+        let amount = match (cutoff.fixed, cutoff.floating) {
+            (None, None) => {return}, // no cutoff
+            (Some(fixed), None) => { // fixed cutoff, drop anything lower than fixed
+                min((fixed - self.position).saturating_unsigned(), self.body.len())
+            },
+            (None, Some(floating)) => { // floating cutoff, shrink to fit
+                self.body.len().saturating_sub(floating.into())
+            },
+            (Some(fixed), Some(floating)) => { // both, take min of the two approaches
+                min(
+                    min(
+                        min((fixed - self.position).saturating_unsigned(), self.body.len()),
+                        self.body.len().saturating_sub(floating.into())
+                    ),
+                    self.body.len()
+                )
+            }
+        };
+        if amount > 0 {
+            self.body.drain(0..amount);
+            self.position += amount;
+        }
+        if self.body.len() == 0 {
+            match cutoff.fixed {
+                None => {},
+                Some(x) => if self.position < x {
+                    self.position = x;
+                }
+            }
+        }
+    }
+}
 
 impl fmt::Display for BigFixed {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
