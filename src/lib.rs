@@ -11,6 +11,3 @@ pub use crate::cutoff::*;
 
 pub mod big_fixed;
 pub use crate::big_fixed::BigFixed;
-
-pub mod big_fixed_c;
-pub use crate::big_fixed_c::BigFixedC;

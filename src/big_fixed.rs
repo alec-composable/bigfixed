@@ -1,11 +1,12 @@
 use crate::{digit::*, Index, Cutoff, CutsOff};
 
-use std::{fmt, ops as stdops, iter::{repeat}, cmp::{min}};
+use std::{fmt, ops as stdops, iter::{repeat}, cmp::{max, min}};
 
 pub mod ops;
 pub mod convert;
+pub mod ops_c;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct BigFixed {
     pub head: Digit,
     pub body: Vec<Digit>,
@@ -31,6 +32,18 @@ impl BigFixed {
         // special case: zero
         if self.head == 0 && self.body.len() == 0 {
             self.position = Index::ZERO;
+        }
+    }
+
+    pub fn format_c(&mut self, cutoff: Cutoff) {
+        self.format();
+        if self.body.len() == 0 && !self.is_zero() {
+            match cutoff.fixed {
+                None => {},
+                Some(x) => if self.position < x {
+                    self.position = x;
+                }
+            }
         }
     }
 
@@ -129,40 +142,38 @@ impl BigFixed {
     pub fn is_zero(&self) -> bool {
         self.head == 0 && self.body.iter().all(|&x| x == 0)
     }
+
+    pub fn cutoff_position(&self, cutoff: Cutoff) -> Index {
+        match (cutoff.fixed, cutoff.floating) {
+            (None, None) => self.position, // no cutoff
+            (Some(fixed), None) => max(self.position, fixed),
+            (None, Some(floating)) => max(self.position, self.body_high() - floating),
+            (Some(fixed), Some(floating)) => min(
+                max(self.position, fixed),
+                max(self.position, self.body_high() - floating)
+            )
+        }
+    }
+
+    // returns isize of bit position, not Digit position, so will overflow with large positions
+    pub fn greatest_bit_position(&self) -> isize {
+        let position = self.body_high();
+        let coefficient: Digit = self[position - 1isize] ^ self.head; // greatest bit which differs from head is greatest bit here
+        isize::from(position*DIGITBITS) - (coefficient.leading_zeros() + 1) as isize
+    }
 }
 
 impl CutsOff for BigFixed {
     fn cutoff(&mut self, cutoff: Cutoff) {
-        let amount = match (cutoff.fixed, cutoff.floating) {
-            (None, None) => {return}, // no cutoff
-            (Some(fixed), None) => { // fixed cutoff, drop anything lower than fixed
-                min((fixed - self.position).saturating_unsigned(), self.body.len())
-            },
-            (None, Some(floating)) => { // floating cutoff, shrink to fit
-                self.body.len().saturating_sub(floating.into())
-            },
-            (Some(fixed), Some(floating)) => { // both, take min of the two approaches
-                min(
-                    min(
-                        min((fixed - self.position).saturating_unsigned(), self.body.len()),
-                        self.body.len().saturating_sub(floating.into())
-                    ),
-                    self.body.len()
-                )
-            }
-        };
+        let amount = min(
+            (self.cutoff_position(cutoff) - self.position).saturating_unsigned(),
+            self.body.len()
+        );
         if amount > 0 {
             self.body.drain(0..amount);
             self.position += amount;
         }
-        if self.body.len() == 0 {
-            match cutoff.fixed {
-                None => {},
-                Some(x) => if self.position < x {
-                    self.position = x;
-                }
-            }
-        }
+        self.format_c(cutoff);
     }
 }
 
@@ -174,10 +185,20 @@ impl fmt::Display for BigFixed {
     }
 }
 
-impl fmt::Debug for BigFixed {
+impl fmt::Binary for BigFixed {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let mut body_rev = self.body.clone();
         body_rev.reverse();
-        write!(f, "{} {:?} position {}", self.head, body_rev, self.position)
+        write!(f, "{} [", self.head).ok();
+        let mut first = true;
+        for x in body_rev {
+            if first {
+                first = false;
+            } else {
+                write!(f, ", ").ok();
+            }
+            write!(f, binary_formatter!(), x).ok();
+        }
+        write!(f, "] position {}", self.position)
     }
 }

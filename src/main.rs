@@ -1,23 +1,13 @@
-use numbers::{digit::*, Index, Cutoff, CutsOff, BigFixed};
+use numbers::{digit::*, Index, Cutoff, BigFixed};
 
 use fastrand;
 
 pub fn main() {
-    let mut a = BigFixed::from(1125912791875585u64);
-    a.head = ALLONES;
-    a.position = 1isize.into();
-    println!("{}", a);
-    for i in -3..7isize {
-        for j in -1..6isize {
-            let mut b = a.clone();
-            let cutoff = Cutoff{
-                fixed: if i == -3 {None} else {Some(Index::from(i))},
-                floating: if j == -1 {None} else {Some(Index::from(j))}
-            };
-            b.cutoff(cutoff);
-            println!("{}\t{}", cutoff, b);
-        }
+    for _i in 0..100000 {
+        let x = fastrand::f64();
+        assert_eq!(x, f64::from(BigFixed::from(x)));
     }
+    println!("all good");
 }
 
 pub fn rand() -> BigFixed {
@@ -65,6 +55,13 @@ pub fn trivial_digit() -> Digit {
 
 pub fn trivial_index() -> Index {
     Index::ZERO
+}
+
+pub fn trivial_cutoff() -> Cutoff {
+    Cutoff {
+        fixed: None,
+        floating: None
+    }
 }
 
 pub fn trivial_bigfixed() -> BigFixed {

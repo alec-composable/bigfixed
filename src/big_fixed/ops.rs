@@ -1,4 +1,4 @@
-use crate::{digit::*, Index as Indx, Cutoff, CutsOff, BigFixed, op_assign_to_op, unary};
+use crate::{digit::*, Index as Indx, Cutoff, CutsOff, BigFixed, macros::*};
 
 use std::{ops::*, cmp::*, option::*};
 
@@ -172,6 +172,12 @@ impl IndexMut<Indx> for BigFixed {
     fn index_mut(&mut self, position: Indx) -> &mut Digit {
         self.ensure_valid_position(position);
         self.body.index_mut(usize::from(position - self.position))
+    }
+}
+
+impl IndexMut<isize> for BigFixed {
+    fn index_mut(&mut self, position: isize) -> &mut Digit {
+        self.index_mut(Indx::from(position))
     }
 }
 

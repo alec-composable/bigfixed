@@ -7,11 +7,10 @@ pub use std::{
     },
     fmt,
     ops::{
-        Add,
-        AddAssign,
+        Add, AddAssign,
         Neg,
-        Sub,
-        SubAssign,
+        Sub, SubAssign,
+        Mul, MulAssign,
         Range
     },
     cmp::{
@@ -22,7 +21,7 @@ pub use std::{
     }
 };
 
-pub use crate::{unary, op_to_op_assign};
+use crate::{macros::*};
 
 #[derive(Clone, Copy, Eq)]
 pub struct Index {
@@ -240,6 +239,87 @@ impl Sub<Index> for isize {
     fn sub(self, other: Index) -> Index {
         Index {
             value: self.checked_sub(other.value).unwrap()
+        }
+    }
+}//
+
+impl Mul for &Index {
+    type Output = Index;
+    fn mul(self, other: &Index) -> Index {
+        Index {
+            value: self.value.checked_mul(other.value).unwrap()
+        }
+    }
+}
+
+op_to_op_assign!(
+    Mul, mul,
+    MulAssign, mul_assign,
+    Index, Index
+);
+
+impl Mul<&Index> for usize {
+    type Output = Index;
+    fn mul(self, other: &Index) -> Index {
+        Index {
+            value: Index::cast(self).checked_mul(other.value).unwrap()
+        }
+    }
+}
+
+impl Mul<Index> for usize {
+    type Output = Index;
+    fn mul(self, other: Index) -> Index {
+        Index {
+            value: Index::cast(self).checked_mul(other.value).unwrap()
+        }
+    }
+}
+
+impl Mul<&usize> for &Index {
+    type Output = Index;
+    fn mul(self, other: &usize) -> Index {
+        Index {
+            value: self.value.checked_mul(Index::cast(*other)).unwrap()
+        }
+    }
+}
+
+op_to_op_assign!(
+    Mul, mul,
+    MulAssign, mul_assign,
+    Index, usize
+);
+
+impl Mul<&isize> for &Index {
+    type Output = Index;
+    fn mul(self, other: &isize) -> Index {
+        Index {
+            value: self.value.checked_mul(*other).unwrap()
+        }
+    }
+}
+
+op_to_op_assign!(
+    Mul, mul,
+    MulAssign, mul_assign,
+    Index, isize
+);
+
+impl Mul<&Index> for isize {
+    type Output = Index;
+    fn mul(self, other: &Index) -> Index {
+        Index {
+            value: self.checked_mul(other.value).unwrap()
+        }
+    }
+}
+
+impl Mul<Index> for isize {
+    type Output = Index;
+    fn mul(self, other: Index) -> Index {
+        Index {
+            value: self.checked_mul(other.value).unwrap()
         }
     }
 }

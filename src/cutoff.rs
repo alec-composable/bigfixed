@@ -21,7 +21,7 @@ use crate::Index;
 
 use std::{convert::{From}, cmp::{PartialEq}, fmt};
 
-#[derive(Copy, Clone, Eq)]
+#[derive(Copy, Clone, Eq, Debug)]
 pub struct Cutoff {
     pub fixed: Option<Index>,
     pub floating: Option<Index>
@@ -47,12 +47,6 @@ pub trait CutsOff {
 }
 
 impl fmt::Display for Cutoff {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "({:?}, {:?})", self.fixed, self.floating)
-    }
-}
-
-impl fmt::Debug for Cutoff {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "({:?}, {:?})", self.fixed, self.floating)
     }

@@ -1,4 +1,4 @@
-use crate::{digit::*, Index, BigFixed};
+use crate::{digit::*, Index, Cutoff, CutsOff, BigFixed};
 
 use std::{convert::{From}};
 
@@ -37,7 +37,7 @@ impl BigFixed {
 
     // load float into a BigFixed as an unsigned integer with identical bits then call this to interpret it correctly
     // float format: [0][sign bit][exponent + bias][significand].[0]
-    /*pub fn float_from_bits(mut self, exponent_len: usize, exponent_bias: isize, significand_len: usize) -> BigFixed {
+    pub fn float_from_bits(mut self, exponent_len: usize, exponent_bias: isize, significand_len: usize) -> BigFixed {
         assert!(!self.is_neg() && self.position >= 0isize, "improper float format");
         self >>= exponent_len + significand_len;
         let is_neg = self[0] == 1;
@@ -57,7 +57,58 @@ impl BigFixed {
             self.negate();
         }
         self
-    }*/
+    }
+
+    // recasts self as an unsigned integer whose bits match the specified pattern, saturating the exponent and truncating the significand
+    pub fn float_to_bits(mut self, exponent_len: usize, exponent_bias: isize, significand_len: usize) -> BigFixed {
+        let neg = self.is_neg();
+        if neg {
+            self.negate();
+        };
+        // head is 0
+        let position = self.greatest_bit_position();
+        if position >= 0 {
+            self >>= position as usize;
+        } else {
+            self <<= (-position) as usize;
+        }
+        // self.int() == 1, pop it because it is implied in float format
+        self.body.pop();
+        let low_pos = -Index::from((significand_len + DIGITBITS - 1) / DIGITBITS);
+        self.cutoff(Cutoff{
+            // ceiling division
+            fixed: Some(low_pos),
+            floating: None
+        });
+        if self.body.len() > 0 {
+            self[low_pos] &= ALLONES << (DIGITBITS - (significand_len % DIGITBITS));
+        }
+        let mut exp = isize::from(position + exponent_bias);
+        let max_exp: isize = usize::from(ALLONES >> (DIGITBITS - exponent_len)).try_into().unwrap();
+        // saturation cases
+        if exp < 0 {
+            // exponent too low, setting to zero
+            exp = 0;
+            self.cutoff(Cutoff{
+                fixed: Some(Index::ZERO),
+                floating: None
+            });
+        } else if exp > max_exp {
+            // exponent too high, setting to infty
+            exp = max_exp;
+            self.cutoff(Cutoff{
+                fixed: Some(Index::ZERO),
+                floating: None
+            });
+        }
+        self += BigFixed::from(exp);
+        self >>= exponent_len;
+        if neg {
+            self += BigFixed::from(1);
+        }
+        self <<= usize::from(exponent_len + significand_len);
+        self
+    }
 }
 
 macro_rules! from_signed_int {
@@ -141,10 +192,12 @@ macro_rules! to_signed_int {
                 let cutoff: $unsigned = 1 as $unsigned << (8 * $num_bytes - 1);
                 let mut c = BigFixed::from(cutoff);
                 if x >= &c {
+                    // saturating: too high
                     (cutoff - 1) as $int
                 } else {
                     c.negate();
                     if x < &c {
+                        // saturating: too low
                         cutoff as $int
                     } else {
                         <$unsigned>::from(x) as $int
@@ -162,15 +215,33 @@ to_signed_int!(i32, u32, 4);
 to_signed_int!(i64, u64, 8);
 to_signed_int!(i128, u128, 16);
 
-/*macro_rules! from_float {
+macro_rules! from_float {
     ($type: ty, $exponent_len: expr, $exponent_bias: expr, $significand_len: expr) => {
         impl From<$type> for BigFixed {
             fn from(x: $type) -> BigFixed {
-                BigFixed::from(x.to_bits()).float_from_bits($exponent_len, $exponent_bias, $significand_len)
+                let mut returner = BigFixed::from(x.to_bits());
+                returner = returner.float_from_bits($exponent_len, $exponent_bias, $significand_len);
+                returner
             }
         }
     };
 }
 
 from_float!(f32, 8, 127, 23);
-from_float!(f64, 11, 1023, 52);*/
+from_float!(f64, 11, 1023, 52);
+
+macro_rules! to_float {
+    ($type: ty, $unsigned_type: ty, $exponent_len: expr, $exponent_bias: expr, $significand_len: expr) => {
+        impl From<BigFixed> for $type {
+            fn from(mut x: BigFixed) -> $type {
+                x = x.float_to_bits($exponent_len, $exponent_bias, $significand_len);
+                <$type>::from_bits(
+                    <$unsigned_type>::from(&x)
+                )
+            }
+        }
+    }
+}
+
+to_float!(f32, u32, 8, 127, 23);
+to_float!(f64, u64, 11, 1023, 52);
