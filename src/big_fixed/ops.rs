@@ -159,15 +159,10 @@ impl BigFixed {
         assert!(!denom.is_zero(), "divide by zero");
         assert!(&*num >= &quotient && denom >= &quotient, "sign issue");
 
+        // starting the actual division
         // the cutoff is denom * base^-to
         let mut cutoff = BigFixed::from(1isize).shift(-Indx::cast(to));
         cutoff *= denom;
-        // if the cutoff is bigger then division gives 0
-        if &*num < &cutoff {
-            return quotient;
-        }
-
-        // starting the actual division
         let denom_tail_len = denom.body.len() - 1;
         let denom_high_position = denom.body_high() - 1isize;
         let mut shifted_denom = denom.clone();
@@ -175,7 +170,7 @@ impl BigFixed {
         while !num.is_zero() && &*num >= &cutoff {
             shifted_denom.position = position - denom_tail_len;
             let mut quot;
-            div!(num[position], num[position - 1isize], shifted_denom[position], shifted_denom[position - 1isize], quot);
+            div!(num[position + 1isize], num[position], shifted_denom[position], quot);
             let mut prod = BigFixed::from(quot);
             prod *= &shifted_denom;
             while &prod < num {
@@ -211,13 +206,9 @@ impl BigFixed {
         println!("looping");
         println!("");
         while !shifting.is_zero() {
-            //println!("shifting\t{}", shifting);
             let quot = BigFixed::combined_div(&mut shifting, base, 0);
-            //println!("quot\t{}", quot);
-            //println!("rem\t{}", shifting);
             digits.push(shifting.clone());
             shifting = quot;
-            //println!("");
         }
         (digits, neg_count.into())
     }
