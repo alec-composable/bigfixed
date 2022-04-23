@@ -3,11 +3,17 @@ use numbers::{digit::*, Index, Cutoff, BigFixed};
 use fastrand;
 
 pub fn main() {
-    for _i in 0..100000 {
-        let x = fastrand::f64();
-        assert_eq!(x, f64::from(BigFixed::from(x)));
-    }
-    println!("all good");
+    let x = 0.2;
+    let digits = BigFixed::from(x).to_digits(&BigFixed::from(10));
+    let real_digits: (Vec<i32>, Index) = (digits.0.iter().map(|y| i32::from(y)).collect(), digits.1);
+    println!("{} -> {:?}", x, real_digits);
+    /*let mut top = BigFixed::from(1);
+    let bottom = BigFixed::from(2);
+    println!("top\t{}", top);
+    println!("bottom\t{}", bottom);
+    let quot = BigFixed::combined_div(&mut top, &bottom, 1);
+    println!("quot\t{}", quot);
+    println!("rem\t{}", top);*/
 }
 
 pub fn rand() -> BigFixed {

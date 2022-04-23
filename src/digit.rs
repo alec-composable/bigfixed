@@ -51,6 +51,16 @@ macro_rules! build_digit {
             }
             
             pub(crate) use mul;
+
+            #[macro_export]
+            macro_rules! div {
+                ($dividend_high: expr, $dividend_low: expr, $divisor_high: expr, $divisor_low: expr, $quot: expr) => {
+                    let dividend = (($dividend_high as DoubleDigit) << DIGITBITS) | ($dividend_low as DoubleDigit);
+                    let divisor = (($divisor_high as DoubleDigit) << DIGITBITS) | ($divisor_low as DoubleDigit);
+                    $quot = (dividend / divisor) as Digit;
+                };
+            }
+            pub(crate) use div;
         }
     };
 }

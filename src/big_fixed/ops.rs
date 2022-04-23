@@ -137,15 +137,91 @@ impl BitXorAssign<&BigFixed> for BigFixed {
     }
 }
 
-// DerefMut is only for smart pointers and that's not what this is
+impl BigFixed {
+    pub fn combined_div(num: &mut BigFixed, denom: &BigFixed, to: usize) -> BigFixed {
+        // Iteratively subtract the highest multiple of the highest shift of denom from num, storing into quotient. Num is replaced by the remainder at each step.
+        // Go until num (the remainder) is small enough so that num / denom has 0s in all positions >= -to, i.e. num < denom / base^to.
+        // sign stuff
+        let mut quotient = BigFixed::from(0);
+        if &*num < &quotient {
+            num.negate();
+            quotient = BigFixed::combined_div(num, denom, to);
+            num.negate();
+            quotient.negate();
+            return quotient;
+        }
+        if denom < &quotient {
+            quotient = BigFixed::combined_div(num, &-denom, to);
+            num.negate();
+            quotient.negate();
+            return quotient;
+        }
+        assert!(!denom.is_zero(), "divide by zero");
+        assert!(&*num >= &quotient && denom >= &quotient, "sign issue");
 
-// Div is complicated -- deal with it later
+        // the cutoff is denom * base^-to
+        let mut cutoff = BigFixed::from(1isize).shift(-Indx::cast(to));
+        cutoff *= denom;
+        // if the cutoff is bigger then division gives 0
+        if &*num < &cutoff {
+            return quotient;
+        }
 
-// DivAssign ^
+        // starting the actual division
+        let denom_tail_len = denom.body.len() - 1;
+        let denom_high_position = denom.body_high() - 1isize;
+        let mut shifted_denom = denom.clone();
+        let mut position = num.body_high() - 1isize;
+        while !num.is_zero() && &*num >= &cutoff {
+            shifted_denom.position = position - denom_tail_len;
+            let mut quot;
+            div!(num[position], num[position - 1isize], shifted_denom[position], shifted_denom[position - 1isize], quot);
+            let mut prod = BigFixed::from(quot);
+            prod *= &shifted_denom;
+            while &prod < num {
+                quot += 1;
+                prod += &shifted_denom;
+            }
+            while &prod > num {
+                quot -= 1;
+                prod -= &shifted_denom;
+            }
+            quotient[position - denom_high_position] = quot;
+            *num -= &prod;
+            position -= 1isize;
+        }
+        quotient.format();
+        quotient
+    }
 
-// Drop ^^
-
-// Fn* -- not relevant
+    pub fn to_digits(&self, base: &BigFixed) -> (Vec<BigFixed>, Indx) {
+        println!("self\t{}", self);
+        println!("base\t{}", base);
+        let mut shifting = self.clone();
+        let mut neg_count: isize = 0;
+        while shifting.position < Indx::ZERO {
+            shifting *= base;
+            neg_count += 1;
+        }
+        if neg_count > 0 {
+            println!("neg count {}", neg_count);
+            println!("shifted\t{}", shifting);
+        }
+        let mut digits = vec![];
+        println!("looping");
+        println!("");
+        while !shifting.is_zero() {
+            //println!("shifting\t{}", shifting);
+            let quot = BigFixed::combined_div(&mut shifting, base, 0);
+            //println!("quot\t{}", quot);
+            //println!("rem\t{}", shifting);
+            digits.push(shifting.clone());
+            shifting = quot;
+            //println!("");
+        }
+        (digits, neg_count.into())
+    }
+}
 
 impl Index<Indx> for BigFixed {
     type Output = Digit;
@@ -254,8 +330,6 @@ impl Not for &BigFixed {
     }
 }
 
-// RangeBounds does not apply to individual BigFixeds
-
 // Rem and RemAssign depend on division
 
 impl ShlAssign<&usize> for BigFixed {
@@ -304,6 +378,7 @@ impl ShrAssign<&usize> for BigFixed {
 
 impl SubAssign<&BigFixed> for BigFixed {
     fn sub_assign(&mut self, other: &BigFixed) {
+        // should probably rewrite this to not allocate unnecessarily
         *self += &-other;
     }
 }

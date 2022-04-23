@@ -161,6 +161,12 @@ impl BigFixed {
         let coefficient: Digit = self[position - 1isize] ^ self.head; // greatest bit which differs from head is greatest bit here
         isize::from(position*DIGITBITS) - (coefficient.leading_zeros() + 1) as isize
     }
+
+    pub const ZERO: BigFixed = BigFixed {
+        head: 0,
+        body: vec![],
+        position: Index::ZERO
+    };
 }
 
 impl CutsOff for BigFixed {

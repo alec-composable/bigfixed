@@ -8,7 +8,6 @@ use crate::{digit::*, Index as Indx, Cutoff, CutsOff, BigFixed, macros::*};
 
 use std::{ops::*};
 
-
 impl BigFixed {
     pub fn shift_c(mut self, shift: isize, cutoff: Cutoff) -> BigFixed {
         self = self.shift(shift);
