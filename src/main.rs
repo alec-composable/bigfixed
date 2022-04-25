@@ -3,10 +3,14 @@ use numbers::{digit::*, Index, Cutoff, BigFixed};
 use fastrand;
 
 pub fn main() {
-    let x = 0.2f64;
-    let digits = BigFixed::from(x).to_digits(&BigFixed::from(10));
-    let real_digits: (Vec<i32>, Index) = (digits.0.iter().map(|y| i32::from(y)).collect(), digits.1);
-    println!("{} -> {:?}", x, real_digits);
+    let mut top = BigFixed::from(10);
+    let bottom = BigFixed::from(7);
+    let precision = 3;
+    print!("{} / {} (to {} places) = ", top, bottom, precision);
+    top = BigFixed::combined_div(&mut top, &bottom, precision);
+    println!("{}", top);
+    top *= bottom;
+    println!("back to {}", top);
 }
 
 pub fn rand() -> BigFixed {

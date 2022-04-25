@@ -173,11 +173,11 @@ impl BigFixed {
             div!(num[position + 1isize], num[position], shifted_denom[position], quot);
             let mut prod = BigFixed::from(quot);
             prod *= &shifted_denom;
-            while &prod < num {
+            while &prod < num && quot < ALLONES {
                 quot += 1;
                 prod += &shifted_denom;
             }
-            while &prod > num {
+            while &prod > num && quot > 0 {
                 quot -= 1;
                 prod -= &shifted_denom;
             }
@@ -190,27 +190,30 @@ impl BigFixed {
     }
 
     pub fn to_digits(&self, base: &BigFixed) -> (Vec<BigFixed>, Indx) {
-        println!("self\t{}", self);
-        println!("base\t{}", base);
-        let mut shifting = self.clone();
+        let mut shifting = self.abs().clone();
         let mut neg_count: isize = 0;
+        //println!("to digits\t{:?}", shifting);
         while shifting.position < Indx::ZERO {
             shifting *= base;
             neg_count += 1;
         }
-        if neg_count > 0 {
-            println!("neg count {}", neg_count);
-            println!("shifted\t{}", shifting);
-        }
+        //println!("to digits starting with {:?} which has been shifted {}", shifting, neg_count);
         let mut digits = vec![];
-        println!("looping");
-        println!("");
         while !shifting.is_zero() {
+            //println!("dividing by 10");
             let quot = BigFixed::combined_div(&mut shifting, base, 0);
+            //println!("quot\t{:?}", quot);
+            //println!("rem\t{:?}", shifting);
             digits.push(shifting.clone());
             shifting = quot;
         }
         (digits, neg_count.into())
+    }
+
+    pub fn to_digits_10(&self) -> (Vec<i32>, Indx) {
+        let (big_digits, point) = self.to_digits(&BigFixed::from(10));
+        let digits: Vec<i32> = big_digits.iter().map(|x| i32::from(x)).collect();
+        (digits, point)
     }
 }
 

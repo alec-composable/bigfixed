@@ -139,6 +139,7 @@ impl BigFixed {
         self
     }
 
+    // does not require proper formatting -- fully checks if self is zero
     pub fn is_zero(&self) -> bool {
         self.head == 0 && self.body.iter().all(|&x| x == 0)
     }
@@ -157,9 +158,21 @@ impl BigFixed {
 
     // returns isize of bit position, not Digit position, so will overflow with large positions
     pub fn greatest_bit_position(&self) -> isize {
+        // zero is special, just return 0
+        if self.is_zero() {
+            return 0;
+        }
         let position = self.body_high();
         let coefficient: Digit = self[position - 1isize] ^ self.head; // greatest bit which differs from head is greatest bit here
         isize::from(position*DIGITBITS) - (coefficient.leading_zeros() + 1) as isize
+    }
+
+    pub fn abs(&self) -> BigFixed {
+        if self.is_neg() {
+            -self.clone()
+        } else {
+            self.clone()
+        }
     }
 
     pub const ZERO: BigFixed = BigFixed {
@@ -183,11 +196,30 @@ impl CutsOff for BigFixed {
     }
 }
 
-impl fmt::Display for BigFixed {
+/*impl fmt::Display for BigFixed {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let mut body_rev = self.body.clone();
         body_rev.reverse();
         write!(f, "{} {:?} position {}", self.head, body_rev, self.position)
+    }
+}*/
+
+impl fmt::Display for BigFixed {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let (mut digits, mut point) = self.to_digits_10();
+        point = digits.len() - point;
+        digits.reverse();
+        if point == 0isize {
+            write!(f, "0").ok();
+        }
+        for d in digits {
+            if point == 0isize {
+                write!(f, ".").ok();
+            }
+            point -= 1isize;
+            write!(f, "{}", d).ok();
+        }
+        write!(f, "")
     }
 }
 

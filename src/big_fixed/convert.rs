@@ -35,17 +35,26 @@ impl BigFixed {
         )
     }
 
+    // TODO: float special cases -- zeroess, infinities, NANs
+
     // load float into a BigFixed as an unsigned integer with identical bits then call this to interpret it correctly
     // float format: [0][sign bit][exponent + bias][significand].[0]
     pub fn float_from_bits(mut self, exponent_len: usize, exponent_bias: isize, significand_len: usize) -> BigFixed {
         assert!(!self.is_neg() && self.position >= 0isize, "improper float format");
+        // get sign
         self >>= exponent_len + significand_len;
         let is_neg = self[0] == 1;
         self[0] = 0;
+        // get exponent
         self <<= exponent_len;
         let exp = <usize>::from(&self) as isize - exponent_bias;
         for i in Index::ZERO.to(&self.body_high()) {
             self[i] = 0;
+        }
+        // introduct implicit significand greatest bit (except for the special case 0)
+        if self.is_zero() && exp == exponent_bias {
+            self.format();
+            return self;
         }
         self[0] = 1;
         if exp < 0 {
@@ -61,6 +70,9 @@ impl BigFixed {
 
     // recasts self as an unsigned integer whose bits match the specified pattern, saturating the exponent and truncating the significand
     pub fn float_to_bits(mut self, exponent_len: usize, exponent_bias: isize, significand_len: usize) -> BigFixed {
+        if self.is_zero() {
+            return self;
+        }
         let neg = self.is_neg();
         if neg {
             self.negate();
@@ -106,7 +118,7 @@ impl BigFixed {
         if neg {
             self += BigFixed::from(1);
         }
-        self <<= usize::from(exponent_len + significand_len);
+        self <<= exponent_len + significand_len;
         self
     }
 }
