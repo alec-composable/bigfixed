@@ -1,16 +1,27 @@
-use crate::{digit::*, Index as Indx, Cutoff, CutsOff, BigFixed, macros::*};
+use crate::{digit::*, Index, BigFixed, BigFixedError};
 
-use std::{ops::*, cmp::*, option::*};
+use std::{
+    ops::{
+        BitOrAssign
+    },
+    cmp::{max, min}
+};
 
 impl BigFixed {
     // Add digit into position and handle carries
-    pub fn add_digit(&mut self, d: Digit, position: Indx) {
+    pub fn add_digit(&mut self, d: Digit, position: Index) -> Result<(), BigFixedError> {
+        assert!(self.properly_positioned());
+        if let Index::Bit(_b) = position {
+            panic!("bit precision add digit not yet supported");
+            // split d into two components then add by digit instead
+        }
+        self.ensure_valid_position(position)?;
         let mut res;
         let mut carry;
         add!(self[position], d, res, carry);
         self[position] = res;
-        let high = self.body_high();
-        let mut on_position = position + 1isize;
+        let high = self.body_high()?;
+        let mut on_position = (position + 1isize)?;
         while carry == 1 && on_position < high {
             add!(self[on_position], 1, res, carry);
             self[on_position] = res;
@@ -23,38 +34,58 @@ impl BigFixed {
             } else {
                 self[high] = 1;
             }
-        }
+        };
+        Ok(())
     }
 
-    pub fn add_digit_drop_overflow(&mut self, d: Digit, position: Indx) {
-        if position >= self.body_high() {
+    // add_digit but leaves (entire) head unchanged
+    pub fn add_digit_drop_overflow(&mut self, d: Digit, position: Index) -> Result<(), BigFixedError> {
+        assert!(self.properly_positioned());
+        if position >= self.body_high()? {
             // already overflows
-            return;
+            return Ok(());
         }
+        if let Index::Bit(_b) = position {
+            panic!("bit precision add digit not yet supported");
+            // split d into two components then add by digit instead
+        }
+        self.ensure_valid_position(position)?;
         let mut res;
         let mut carry;
         add!(self[position], d, res, carry);
         self[position] = res;
-        let high = self.body_high();
-        let mut on_position = position + 1isize;
+        let high = self.body_high()?;
+        let mut on_position = (position + 1isize)?;
         while carry == 1 && on_position < high {
             add!(self[on_position], 1, res, carry);
             self[on_position] = res;
             on_position += 1isize;
         }
+        Ok(())
     }
 
     // mutate in place to negative
-    pub fn negate(&mut self) {
+    pub fn negate(&mut self) -> Result<(), BigFixedError> {
         self.head = !self.head;
         for i in 0..self.body.len() {
             self.body[i] = !self.body[i];
         }
-        self.add_digit(1, self.position);
-        self.format();
+        self.add_digit(1, self.position)?;
+        self.format()?;
+        Ok(())
+    }
+
+    pub fn abs(&self) -> Result<BigFixed, BigFixedError> {
+        if self.is_neg() {
+            Ok(self.clone())
+        } else {
+            let mut copy = self.clone();
+            copy.negate()?;
+            Ok(copy)
+        }
     }
 }
-
+/*
 impl AddAssign<&BigFixed> for BigFixed {
     fn add_assign(&mut self, other: &BigFixed) {
         // align self valid range
@@ -105,24 +136,24 @@ impl BitAndAssign<&BigFixed> for BigFixed {
 
         self.head &= other.head;
     }
-}
+}*/
 
 impl BitOrAssign<&BigFixed> for BigFixed {
     fn bitor_assign(&mut self, other: &BigFixed) {
         // align self valid range
         let position = min(self.position, other.position);
-        let high = max(self.body_high(), other.body_high());
-        self.ensure_valid_range(position, high);
+        let high = max(self.body_high().unwrap(), other.body_high().unwrap());
+        self.ensure_valid_range(position, high).ok();
 
         for i in 0..self.body.len() {
-            self.body[i] |= other[self.position + i as isize];
+            self.body[i] |= other[(self.position + i as isize).unwrap()];
         }
 
         self.head |= other.head;
     }
 }
 
-impl BitXorAssign<&BigFixed> for BigFixed {
+/*impl BitXorAssign<&BigFixed> for BigFixed {
     fn bitxor_assign(&mut self, other: &BigFixed) {
         // align self valid range
         let position = min(self.position, other.position);
@@ -214,40 +245,6 @@ impl BigFixed {
         let (big_digits, point) = self.to_digits(&BigFixed::from(10));
         let digits: Vec<i32> = big_digits.iter().map(|x| i32::from(x)).collect();
         (digits, point)
-    }
-}
-
-impl Index<Indx> for BigFixed {
-    type Output = Digit;
-    fn index(&self, position: Indx) -> &Digit {
-        let shifted = position - self.position;
-        if shifted >= self.body.len() as isize {
-            &self.head
-        } else if shifted >= 0isize {
-            &self.body[usize::from(shifted)]
-        } else {
-            &0
-        }
-    }
-}
-
-impl Index<isize> for BigFixed {
-    type Output = Digit;
-    fn index(&self, position: isize) -> &Digit {
-        &self[Indx::from(position)]
-    }
-}
-
-impl IndexMut<Indx> for BigFixed {
-    fn index_mut(&mut self, position: Indx) -> &mut Digit {
-        self.ensure_valid_position(position);
-        self.body.index_mut(usize::from(position - self.position))
-    }
-}
-
-impl IndexMut<isize> for BigFixed {
-    fn index_mut(&mut self, position: isize) -> &mut Digit {
-        self.index_mut(Indx::from(position))
     }
 }
 
@@ -421,4 +418,4 @@ impl PartialOrd for BigFixed {
             Ordering::Greater => Some(Ordering::Less)
         }
     }
-}
+}*/

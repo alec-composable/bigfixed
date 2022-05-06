@@ -1,6 +1,7 @@
-use paste::paste;
+// Digit specifies u* arithmetic (wrapping) from one of the native integer types. It could be hard coded as u32 or u64 but
+// the smaller types u16/u8 are easier to work with while developing and testing. Hence which one is in use is decided via this macro.
 
-// This is better but it can still be improved. It would be really nice to only have to call build_digit!(2) to get u16 digits.
+use paste::paste;
 
 macro_rules! build_digit {
     ($bits: expr, $double_bits: expr) => {
@@ -50,7 +51,7 @@ macro_rules! build_digit {
                 };
             }
             
-            pub(crate) use mul;
+            //pub(crate) use mul;
 
             #[macro_export]
             macro_rules! div {
@@ -60,7 +61,7 @@ macro_rules! build_digit {
                     $quot = (dividend / divisor) as Digit;
                 };
             }
-            pub(crate) use div;
+            //pub(crate) use div;
         }
     };
 }

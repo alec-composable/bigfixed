@@ -1,19 +1,10 @@
-use numbers::{digit::*, Index, Cutoff, BigFixed};
-
-use fastrand;
+use bigfixed::{digit::*, Index, Cutoff, BigFixed};
 
 pub fn main() {
-    let mut top = BigFixed::from(10);
-    let bottom = BigFixed::from(7);
-    let precision = 3;
-    print!("{} / {} (to {} places) = ", top, bottom, precision);
-    top = BigFixed::combined_div(&mut top, &bottom, precision);
-    println!("{}", top);
-    top *= bottom;
-    println!("back to {}", top);
+    
 }
 
-pub fn rand() -> BigFixed {
+/*pub fn rand() -> BigFixed {
     BigFixed::from(fastrand::i128(..))
 }
 
@@ -48,7 +39,7 @@ pub fn bit_test() {
     println!("u128\t0\t{}", BigFixed::from(0u128));
     println!("u128\t1\t{}", BigFixed::from(1u128));
     println!("u128\t-1\t{}", BigFixed::from(-1i128 as u128));
-}
+}*/
 
 // to get the compiler to shut up about unused imports
 
@@ -57,7 +48,7 @@ pub fn trivial_digit() -> Digit {
 }
 
 pub fn trivial_index() -> Index {
-    Index::ZERO
+    Index::Position(0)
 }
 
 pub fn trivial_cutoff() -> Cutoff {
@@ -68,5 +59,9 @@ pub fn trivial_cutoff() -> Cutoff {
 }
 
 pub fn trivial_bigfixed() -> BigFixed {
-    BigFixed::from(0)
+    BigFixed {
+        head: 0,
+        body: vec![],
+        position: trivial_index()
+    }
 }

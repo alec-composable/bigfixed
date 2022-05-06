@@ -17,7 +17,7 @@
     they truncate quickly enough lest they devour available resources.
 */
 
-use crate::Index;
+use crate::{Index, BigFixedError};
 
 use std::{convert::{From}, cmp::{PartialEq}, fmt};
 
@@ -43,7 +43,7 @@ impl PartialEq for Cutoff {
 }
 
 pub trait CutsOff {
-    fn cutoff(&mut self, cutoff: Cutoff);
+    fn cutoff(&mut self, cutoff: Cutoff) -> Result<(), BigFixedError>;
 }
 
 impl fmt::Display for Cutoff {
