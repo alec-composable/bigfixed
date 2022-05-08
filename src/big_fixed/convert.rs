@@ -130,6 +130,19 @@ impl BigFixed {
     }
 }
 
+impl From<&[u8]> for BigFixed {
+    fn from(bytes: &[u8]) -> BigFixed {
+        BigFixed::int_from_bytes(bytes, true).unwrap()
+    }
+}
+
+impl From<&[i8]> for BigFixed {
+    fn from(bytes: &[i8]) -> BigFixed {
+        let bytes: Vec<u8> = bytes.iter().map(|b| *b as u8).collect();
+        BigFixed::int_from_bytes(bytes.as_slice(), false).unwrap()
+    }
+}
+
 macro_rules! from_signed_int {
     ($s: ty, $n: expr) => {
         impl From<$s> for BigFixed {

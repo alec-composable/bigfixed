@@ -262,3 +262,120 @@ fn shift() {
 
 // cutoff position
 // greatest bit position
+
+#[test]
+fn cutoff() {
+    macro_rules! test_cutoff_fixed_bit {
+        ($src: expr, $bit: expr, $head: expr, $body: expr, $position: expr, $msg: expr) => {
+            let mut src = BigFixed::from($src);
+            src.cutoff_fixed_bit($bit).unwrap();
+            assert_eq!(
+                src,
+                BigFixed {
+                    head: $head,
+                    body: $body,
+                    position: Position($position)
+                },
+                $msg
+            );
+        };
+    }
+    macro_rules! test_cutoff_floating_bit {
+        ($src: expr, $bit: expr, $head: expr, $body: expr, $position: expr, $msg: expr) => {
+            let mut src = BigFixed::from($src);
+            src.cutoff_floating_bit($bit).unwrap();
+            assert_eq!(
+                src,
+                BigFixed {
+                    head: $head,
+                    body: $body,
+                    position: Position($position)
+                },
+                $msg
+            );
+        };
+    }
+    macro_rules! test_cutoff_fixed_position {
+        ($src: expr, $bit: expr, $head: expr, $body: expr, $position: expr, $msg: expr) => {
+            let mut src = BigFixed::from($src);
+            src.cutoff_fixed_position($bit).unwrap();
+            assert_eq!(
+                src,
+                BigFixed {
+                    head: $head,
+                    body: $body,
+                    position: Position($position)
+                },
+                $msg
+            );
+        };
+    }
+    macro_rules! test_cutoff_floating_position {
+        ($src: expr, $bit: expr, $head: expr, $body: expr, $position: expr, $msg: expr) => {
+            let mut src = BigFixed::from($src);
+            src.cutoff_floating_position($bit).unwrap();
+            assert_eq!(
+                src,
+                BigFixed {
+                    head: $head,
+                    body: $body,
+                    position: Position($position)
+                },
+                $msg
+            );
+        };
+    }
+    // msg format: "src fixed floating"
+    test_cutoff_fixed_bit!(0, 0, 0, vec![], 0, "0 [0] .");
+    test_cutoff_floating_bit!(0, 0, 0, vec![], 0, "0 . [0]");
+    test_cutoff_fixed_position!(0, 0, 0, vec![], 0, "0 (0) .");
+    test_cutoff_floating_position!(0, 0, 0, vec![], 0, "0 . (0)");
+    test_cutoff_fixed_bit!(0, 6, 0, vec![], 0, "0 [6] .");
+    test_cutoff_floating_bit!(0, 6, 0, vec![], 0, "0 . [6]");
+    test_cutoff_fixed_position!(0, 6, 0, vec![], 0, "0 (6) .");
+    test_cutoff_floating_position!(0, 6, 0, vec![], 0, "0 . (6)");
+    test_cutoff_fixed_bit!(0, -6, 0, vec![], 0, "0 [-6] .");
+    test_cutoff_floating_bit!(0, -6, 0, vec![], 0, "0 . [-6]");
+    test_cutoff_fixed_position!(0, -6, 0, vec![], 0, "0 (-6) .");
+    test_cutoff_floating_position!(0, -6, 0, vec![], 0, "0 . (-6)");
+
+    test_cutoff_fixed_bit!(1, 0, 0, vec![1], 0, "1 [0] .");
+    test_cutoff_floating_bit!(1, 0, 0, vec![], 0, "1 . [0]");
+    test_cutoff_fixed_position!(1, 0, 0, vec![1], 0, "1 (0) .");
+    test_cutoff_floating_position!(1, 0, 0, vec![], 0, "1 . (0)");
+    test_cutoff_fixed_bit!(1, 6, 0, vec![], 0, "1 [6] .");
+    test_cutoff_floating_bit!(1, 6, 0, vec![1], 0, "1 . [6]");
+    test_cutoff_fixed_position!(1, 6, 0, vec![], 0, "1 (6) .");
+    test_cutoff_floating_position!(1, 6, 0, vec![1], 0, "1 . (6)");
+    test_cutoff_fixed_bit!(1, -6, 0, vec![1], 0, "1 [-6] .");
+    test_cutoff_floating_bit!(1, -6, 0, vec![], 0, "1 . [-6]");
+    test_cutoff_fixed_position!(1, -6, 0, vec![1], 0, "1 (-6) .");
+    test_cutoff_floating_position!(1, -6, 0, vec![], 0, "1 . (-6)");
+
+    test_cutoff_fixed_bit!(-1, 0, ALLONES, vec![], 0, "-1 [0] .");
+    test_cutoff_floating_bit!(-1, 0, ALLONES, vec![], 0, "-1 . [0]");
+    test_cutoff_fixed_position!(-1, 0, ALLONES, vec![], 0, "-1 (0) .");
+    test_cutoff_floating_position!(-1, 0, ALLONES, vec![], 0, "-1 . (0)");
+    test_cutoff_fixed_bit!(-1, 6, ALLONES, vec![ALLONES << 6], 0, "-1 [6] .");
+    test_cutoff_floating_bit!(-1, 6, ALLONES, vec![], 0, "-1 . [6]");
+    test_cutoff_fixed_position!(-1, 6, ALLONES, vec![], 6, "-1 (6) .");
+    test_cutoff_floating_position!(-1, 6, ALLONES, vec![], 0, "-1 . (6)");
+    test_cutoff_fixed_bit!(-1, -6, ALLONES, vec![], 0, "-1 [-6] .");
+    test_cutoff_floating_bit!(-1, -6, ALLONES, vec![], 0, "-1 . [-6]");
+    test_cutoff_fixed_position!(-1, -6, ALLONES, vec![], 0, "-1 (-6) .");
+    test_cutoff_floating_position!(-1, -6, ALLONES, vec![], 0, "-1 . (-6)");
+
+    let two_nums = u128::from(&BigFixed::construct(0, vec![255, 255], Position(0)).unwrap());
+    test_cutoff_fixed_bit!(two_nums, 0, 0, vec![255, 255], 0, "11 [0] .");
+    test_cutoff_floating_bit!(two_nums, 0, 0, vec![], 0, "11 . [0]");
+    test_cutoff_fixed_position!(two_nums, 0, 0, vec![255, 255], 0, "11 (0) .");
+    test_cutoff_floating_position!(two_nums, 0, 0, vec![], 0, "11 . (0)");
+    test_cutoff_fixed_bit!(two_nums, 6, 0, vec![255, 255 & (ALLONES << 6)], 0, "11 [6] .");
+    test_cutoff_floating_bit!(two_nums, 6, 0, vec![255 & !3], 1, "11 . [6]"); // 255 is 0b11111111, taking six bits gives 0b11111100
+    test_cutoff_fixed_position!(two_nums, 6, 0, vec![], 0, "11 (6) .");
+    test_cutoff_floating_position!(two_nums, 6, 0, vec![255, 255], 0, "11 . (6)");
+    test_cutoff_fixed_bit!(two_nums, -6, 0, vec![255, 255], 0, "11 [-6] .");
+    test_cutoff_floating_bit!(two_nums, -6, 0, vec![], 0, "11 . [-6]");
+    test_cutoff_fixed_position!(two_nums, -6, 0, vec![255, 255], 0, "11 (-6) .");
+    test_cutoff_floating_position!(two_nums, -6, 0, vec![], 0, "11 . (-6)");
+}

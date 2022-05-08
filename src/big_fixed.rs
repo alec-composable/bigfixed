@@ -60,6 +60,9 @@ impl BigFixed {
     pub fn fix_position(&mut self) -> Result<bool, BigFixedError> {
         let changed;
         match self.position {
+            Index::Position(_) => {
+                changed = false;
+            },
             Index::Bit(b) => {
                 let diff = Index::uncastsize(b.rem_euclid(Index::castsize(DIGITBITS)?))?; 
                 let p = (b - Index::castsize(diff)?) / Index::castsize(DIGITBITS)?;
@@ -85,9 +88,6 @@ impl BigFixed {
                 }
                 self.position = Index::Position(p);
                 changed = true;
-            },
-            Index::Position(_) => {
-                changed = false;
             }
         }
         Ok(changed)
@@ -125,7 +125,7 @@ impl BigFixed {
 
     // Restructure if necessary so that all positions in low..high are valid. Breaks format so reformat afterwards. Returns whether restructuring was necessary.
     pub fn ensure_valid_range(&mut self, low: Index, high: Index) -> Result<bool, BigFixedError> {
-        assert!(self.properly_positioned());
+        self.fix_position()?;
         if low >= high {
             if low == high {
                 return Ok(false);
@@ -167,7 +167,6 @@ impl BigFixed {
 
     // the least position which is outside of the range contained in body
     pub fn body_high(&self) -> Result<Index, BigFixedError> {
-        assert!(self.properly_positioned());
         match self.position + self.body.len() {
             Ok(res) => Ok(res),
             Err(e) => Err(BigFixedIndexError(e))
@@ -175,7 +174,6 @@ impl BigFixed {
     }
 
     pub fn valid_range(&self) -> Result<stdops::Range<Index>, BigFixedError> {
-        assert!(self.properly_positioned());
         Ok(self.position..self.body_high()?)
     }
 
@@ -229,20 +227,61 @@ impl BigFixed {
         Ok(true)
     }
 
-    pub fn cutoff_position(&self, cutoff: Cutoff) -> Result<Index, BigFixedError> {
+    pub fn cutoff_index(&self, cutoff: Cutoff) -> Result<Index, BigFixedError> {
         match (cutoff.fixed, cutoff.floating) {
             (None, None) => Ok(self.position), // no cutoff
             (Some(fixed), None) => Ok(max(self.position, fixed)),
-            (None, Some(floating)) => Ok(max(self.position, (self.body_high()? - floating)?)),
+            (None, Some(floating)) => Ok(max(
+                self.position,
+                ((self.greatest_bit_position()? + Index::Bit(1))? - max(floating, Index::Bit(0)))?
+            )),
             (Some(fixed), Some(floating)) => Ok(min(
                 max(self.position, fixed),
-                max(self.position, (self.body_high()? - floating)?))
+                max(
+                    self.position,
+                    ((self.greatest_bit_position()? + Index::Bit(1))? - max(floating, Index::Bit(0)))?
+                ))
             )
         }
     }
 
+    pub fn cutoff_fixed_bit(&mut self, b: isize) -> Result<(), BigFixedError> {
+        self.cutoff(
+            Cutoff {
+                fixed: Some(Index::Bit(b)),
+                floating: None
+            }
+        )
+    }
+
+    pub fn cutoff_fixed_position(&mut self, p: isize) -> Result<(), BigFixedError> {
+        self.cutoff(
+            Cutoff {
+                fixed: Some(Index::Position(p)),
+                floating: None
+            }
+        )
+    }
+
+    pub fn cutoff_floating_bit(&mut self, b: isize) -> Result<(), BigFixedError> {
+        self.cutoff(
+            Cutoff {
+                fixed: None,
+                floating: Some(Index::Bit(b))
+            }
+        )
+    }
+
+    pub fn cutoff_floating_position(&mut self, p: isize) -> Result<(), BigFixedError> {
+        self.cutoff(
+            Cutoff {
+                fixed: None,
+                floating: Some(Index::Position(p))
+            }
+        )
+    }
+
     pub fn greatest_bit_position(&self) -> Result<Index, BigFixedError> {
-        assert!(self.properly_positioned());
         // zero is special, just return 0
         if self.is_zero() {
             return Ok(Index::Position(0));
@@ -260,19 +299,33 @@ impl BigFixed {
 }
 
 impl CutsOff for BigFixed {
-    fn cutoff(&mut self, cutoff: Cutoff) -> Result<(), BigFixedError>{
-        assert!(self.properly_positioned());
-        let cutoff_position = self.cutoff_position(cutoff)?;
-        let as_bit = cutoff_position.cast_to_bit()?;
-        let as_pos = cutoff_position.cast_to_position();
-        if as_pos < self.position {
-            self.body.drain(0..(self.position - as_pos)?.into());
+    fn cutoff(&mut self, cutoff: Cutoff) -> Result<(), BigFixedError> {
+        //println!("{} cutting off {}", self, cutoff);
+        self.fix_position()?;
+        //println!("fixed pos {}", self);
+        let cutoff_index = self.cutoff_index(cutoff)?;
+        //println!("cutoff index {}", cutoff_index);
+        let as_bit = cutoff_index.cast_to_bit()?;
+        let as_pos = cutoff_index.cast_to_position();
+        //println!("that is {} {}", as_bit, as_pos);
+        self.position = min(self.position, as_pos);
+        //println!("cut off tail {}", self);
+        if as_pos > self.position {
+            //println!("draining {}", min(self.body.len(), (as_pos - self.position)?.into()));
+            self.body.drain(0..min(self.body.len(), (as_pos - self.position)?.into()));
             self.position = as_pos;
+            //println!("drained body {}", self);
         }
-        let diff = (as_bit - as_pos)?.unsigned_value();
+        let diff = (as_bit - as_pos)?.value();
         if diff > 0 {
-            self[as_pos] &= ALLONES << diff;
+            //println!("diffing {}", diff);
+            if self.body.len() == 0 {
+                self.body.push(self.head);
+            }
+            let len = self.body.len();
+            self.body[len - 1] &= ALLONES << diff;
         }
+        self.format()?;
         Ok(())
     }
 }
