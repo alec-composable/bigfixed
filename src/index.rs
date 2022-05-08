@@ -391,8 +391,8 @@ impl Sub<&Index> for usize {
     type Output = Result<Index, IndexError>;
     fn sub(self, other: &Index) -> Result<Index, IndexError> {
         match other {
-            Position(x) => Ok(Position(x.checked_sub(Index::castsize(self)?).ok_or(AdditionOverflow)?)),
-            Bit(x) => Ok(Bit(x.checked_sub(Index::castsize(self)?).ok_or(AdditionOverflow)?)),
+            Position(x) => Ok(Position(Index::castsize(self)?.checked_sub(*x).ok_or(AdditionOverflow)?)),
+            Bit(x) => Ok(Bit(Index::castsize(self)?.checked_sub(*x).ok_or(AdditionOverflow)?)),
         }
     }
 }

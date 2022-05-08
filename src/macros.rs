@@ -14,61 +14,78 @@ pub(crate) use unary;
 
 #[macro_export]
 macro_rules! op_assign_to_op {
-    // a += &b => (a += b; &a + &b; &a + b; a+ &b; a + b)
+    // a +.= &b to:
+    // a += &b
+    // a += b
+    // a +. &b
+    // &a + &b
+    // &a + b
+    // a + &b
+    // a + b
     (
         $op: ident, $op_fn_name: ident,
         $op_assign: ident, $op_assign_fn_name: ident,
-        $self_type: ty, $other_type: ty
+        $self_type: ty, $other_type: ty,
+        $result_type: ty, $error_type: ty
     ) => {
+        // a += &b
+        impl $op_assign<&$other_type> for $self_type {
+            fn $op_assign_fn_name(&mut self, other: &$other_type) {
+                <$self_type>::$op_assign_fn_name(self, other).unwrap();
+            }
+        }
+
         // a += b
         impl $op_assign<$other_type> for $self_type {
             fn $op_assign_fn_name(&mut self, other: $other_type) {
-                self.$op_assign_fn_name(&other);
+                <$self_type>::$op_assign_fn_name(self, &other).unwrap();
             }
         }
+        
+        // a +. &b
+        impl $self_type {
+            pub fn $op_fn_name(&self, other: &$other_type) -> Result<$result_type, $error_type> {
+                let mut res = self.clone();
+                res.$op_assign_fn_name(other)?;
+                Ok(res)
+            }
+        }
+
         // &a + &b
         impl $op<&$other_type> for &$self_type {
-            type Output = $self_type;
-            fn $op_fn_name(self, other: &$other_type) -> $self_type {
-                use $op_assign;
-                let mut res = self.clone();
-                res.$op_assign_fn_name(other);
-                res
+            type Output = $result_type;
+            fn $op_fn_name(self, other: &$other_type) -> $result_type {
+                <$self_type>::$op_fn_name(self, other).unwrap()
             }
         }
+
         // &a + b
         impl $op<$other_type> for &$self_type {
-            type Output = $self_type;
-            fn $op_fn_name(self, other: $other_type) -> $self_type {
-                use $op_assign;
-                let mut res = self.clone();
-                res.$op_assign_fn_name(other);
-                res
+            type Output = $result_type;
+            fn $op_fn_name(self, other: $other_type) -> $result_type {
+                <$self_type>::$op_fn_name(self, &other).unwrap()
             }
         }
+
         // a + &b
         impl $op<&$other_type> for $self_type {
-            type Output = $self_type;
-            fn $op_fn_name(self, other: &$other_type) -> $self_type {
-                use $op_assign;
-                let mut res = self.clone();
-                res.$op_assign_fn_name(other);
-                res
+            type Output = $result_type;
+            fn $op_fn_name(self, other: &$other_type) -> $result_type {
+                <$self_type>::$op_fn_name(&self, other).unwrap()
             }
         }
+
         // a + b
         impl $op<$other_type> for $self_type {
-            type Output = $self_type;
-            fn $op_fn_name(self, other: $other_type) -> $self_type {
-                use $op_assign;
-                let mut res = self.clone();
-                res.$op_assign_fn_name(other);
-                res
+            type Output = $result_type;
+            fn $op_fn_name(self, other: $other_type) -> $result_type {
+                <$self_type>::$op_fn_name(&self, &other).unwrap()
             }
         }
     };
+
+
 }
-//pub(crate) use op_assign_to_op;
 
 #[macro_export]
 macro_rules! op_to_op_assign {

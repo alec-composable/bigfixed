@@ -326,11 +326,16 @@ impl CutsOff for BigFixed {
 
 impl fmt::Display for BigFixed {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        /*let (mut digits, mut point) = self.to_digits_10();
+        if self.is_neg() {
+            return write!(f, "-{}", (-self).unwrap());
+        };
+        let (mut digits, mut point) = self.to_digits_10().unwrap();
         point = (digits.len() - point).unwrap();
         digits.reverse();
         if point == 0isize {
             write!(f, "0").ok();
+        } else if point < 0isize {
+            write!(f, "0.{}", std::iter::repeat("0").take((-point).unwrap().unsigned_value()).collect::<String>()).ok();
         }
         for d in digits {
             if point == 0isize {
@@ -339,8 +344,7 @@ impl fmt::Display for BigFixed {
             point -= 1isize;
             write!(f, "{}", d).ok();
         }
-        write!(f, "")*/
-        write!(f, "{:?}", self)
+        write!(f, "")
     }
 }
 

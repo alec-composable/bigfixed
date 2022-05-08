@@ -1,7 +1,14 @@
 use bigfixed::{digit::*, Index, Cutoff, BigFixed};
 
 pub fn main() {
-    
+    let mut x = BigFixed::from(1);
+    let y = BigFixed::from(3);
+    let precision = 5;
+    println!("{} / {} to {} places", x, y, precision);
+    let z = BigFixed::combined_div(&mut x, &y, precision).unwrap();
+    println!("quot\t{}\t{:?}", z, z);
+    println!("rem\t{}\t{:?}", x, x);
+    println!("reconstituted: {}", &z * &y + &x);
 }
 
 /*pub fn rand() -> BigFixed {

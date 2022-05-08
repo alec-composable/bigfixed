@@ -41,42 +41,31 @@ impl BigFixed {
     // float format: [0][sign bit][exponent + bias][significand].[0]
     pub fn float_from_bits(mut self, exponent_len: usize, exponent_bias: isize, significand_len: usize) -> Result<BigFixed, BigFixedError> {
         assert!(!self.is_neg() && self.position >= 0isize, "improper float format");
-        //println!("bits\t{:b}", self);
         // get sign
         self = self.shift(Index::Bit(-Index::castsize(exponent_len + significand_len)?))?;
-        //println!("sign sh\t{:b}", self);
         let is_neg = self[0] == 1;
         self[0] = 0;
-        //println!("sign rs\t{:b}", self);
         // get exponent
         self = self.shift(Index::Bit(Index::castsize(exponent_len)?))?;
-        //println!("exp sh\t{:b}", self);
         let exp = Index::castsize(<usize>::from(&self))? - exponent_bias;
-        //println!("exp {}", exp);
         for i in 0..max(0, self.body_high()?.value()) {
             self[i] = 0;
         }
-        //println!("exp res\t{:b}", self);
         // introduct implicit significand greatest bit (except for the special case 0)
         if self.is_zero() && exp == exponent_bias {
-        //    println!("zeroed");
             self.format()?;
             return Ok(self);
         }
         self[0] = 1;
-        //println!("leading\t{:b}", self);
         self = self.shift(Index::Bit(exp))?;
-        //println!("exp sh\t{:b}", self);
         if is_neg {
             self.negate()?;
         }
-        //println!("signed\t{:b}", self);
         Ok(self)
     }
 
     // recasts self as an unsigned integer whose bits match the specified pattern, saturating the exponent and truncating the significand
     pub fn float_to_bits(mut self, exponent_len: usize, exponent_bias: isize, significand_len: usize) -> Result<BigFixed, BigFixedError> {
-        println!("start\t{:b}", self);
         if self.is_zero() {
             return Ok(self);
         }
@@ -84,21 +73,16 @@ impl BigFixed {
         if neg {
             self.negate()?;
         };
-        println!("abs\t{:b}", self);
         // head is 0
         let position = self.greatest_bit_position()?;
         self = self.shift((-position)?)?;
-        println!("norm sh\t{:b}", self);
         // self.int() == 1, pop it because it is implied in float format
         self.body.pop();
-        println!("decap\t{:b}", self);
         let low_pos = (-Index::Bit(Index::castsize(significand_len + DIGITBITS - 1)?))?;
-        println!("low {}", low_pos);
         self.cutoff(Cutoff{
             fixed: Some(low_pos),
             floating: None
         })?;
-        println!("cutoff\t{:b}", self);
         if self.body.len() > 0 {
             self[low_pos] &= ALLONES << (DIGITBITS - (significand_len % DIGITBITS));
         }
@@ -217,8 +201,7 @@ to_unsigned_int!(u128, 16);
 
 // to_signed_int is a saturating cast
 
-// waiting for ops...
-/*macro_rules! to_signed_int {
+macro_rules! to_signed_int {
     ($int: ty, $unsigned: ty, $num_bytes: expr) => {
         impl From<&BigFixed> for $int {
             fn from(x: &BigFixed) -> $int {
@@ -228,7 +211,7 @@ to_unsigned_int!(u128, 16);
                     // saturating: too high
                     (cutoff - 1) as $int
                 } else {
-                    c.negate();
+                    c.negate().unwrap();
                     if x < &c {
                         // saturating: too low
                         cutoff as $int
@@ -246,7 +229,7 @@ to_signed_int!(i8, u8, 1);
 to_signed_int!(i16, u16, 2);
 to_signed_int!(i32, u32, 4);
 to_signed_int!(i64, u64, 8);
-to_signed_int!(i128, u128, 16);*/
+to_signed_int!(i128, u128, 16);
 
 macro_rules! from_float {
     ($type: ty, $exponent_len: expr, $exponent_bias: expr, $significand_len: expr) => {

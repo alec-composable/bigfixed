@@ -51,7 +51,7 @@ macro_rules! build_digit {
                 };
             }
             
-            //pub(crate) use mul;
+            pub(crate) use mul;
 
             #[macro_export]
             macro_rules! div {
@@ -61,7 +61,7 @@ macro_rules! build_digit {
                     $quot = (dividend / divisor) as Digit;
                 };
             }
-            //pub(crate) use div;
+            pub(crate) use div;
         }
     };
 }
