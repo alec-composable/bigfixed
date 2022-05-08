@@ -7,9 +7,9 @@
     For a number x with positional representation (b_k) (k ranges over Index) the fixed cutoff is a guarantee that no b_k for k >= n ever gets cut off.
     n is a lower bound for lossless addition -- if x and y are two BigFixeds with positions >= n then x + y is lossless.
 
-    A cutoff with (None, m) corresponds to floating point arithmetic with significand width m. In this scheme the head corresponds to the sign bit.
-    The floating cutoff is a lower bound on word size. In numbers like 0.00000232321423... which are below the fixed cutoff and which do not truncate quickly
-    (or ever), the value of m states how many nontrivial coefficients to keep.
+    A cutoff with (None, m) corresponds to floating point arithmetic with significand width m. In this scheme the head corresponds to the sign bit and
+    the implied most significant bit. The floating cutoff is a lower bound on word size. In numbers like 0.00000232321423... which are below the fixed
+    cutoff and which do not truncate quickly (or ever), the value of m states how many nontrivial coefficients to keep.
 
     Together the BigFixed cutoff scheme with respect to (n, m) is like floating point behavior with significand width m combined with BigInt fixed point
     behavior for positions at and above n. This ensures lossless additive structure above the fixed cutoff while maintaining floating multiplicative

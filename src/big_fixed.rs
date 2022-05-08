@@ -231,16 +231,10 @@ impl BigFixed {
         match (cutoff.fixed, cutoff.floating) {
             (None, None) => Ok(self.position), // no cutoff
             (Some(fixed), None) => Ok(max(self.position, fixed)),
-            (None, Some(floating)) => Ok(max(
-                self.position,
-                ((self.greatest_bit_position()? + Index::Bit(1))? - max(floating, Index::Bit(0)))?
-            )),
+            (None, Some(floating)) => Ok(max(self.position, (self.greatest_bit_position()? - max(floating, Index::Bit(0)))?)),
             (Some(fixed), Some(floating)) => Ok(min(
                 max(self.position, fixed),
-                max(
-                    self.position,
-                    ((self.greatest_bit_position()? + Index::Bit(1))? - max(floating, Index::Bit(0)))?
-                ))
+                max(self.position, (self.greatest_bit_position()? - max(floating, Index::Bit(0)))?))
             )
         }
     }

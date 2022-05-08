@@ -340,17 +340,17 @@ fn cutoff() {
     test_cutoff_floating_position!(0, -6, 0, vec![], 0, "0 . (-6)");
 
     test_cutoff_fixed_bit!(1, 0, 0, vec![1], 0, "1 [0] .");
-    test_cutoff_floating_bit!(1, 0, 0, vec![], 0, "1 . [0]");
+    test_cutoff_floating_bit!(1, 0, 0, vec![1], 0, "1 . [0]");
     test_cutoff_fixed_position!(1, 0, 0, vec![1], 0, "1 (0) .");
-    test_cutoff_floating_position!(1, 0, 0, vec![], 0, "1 . (0)");
+    test_cutoff_floating_position!(1, 0, 0, vec![1], 0, "1 . (0)");
     test_cutoff_fixed_bit!(1, 6, 0, vec![], 0, "1 [6] .");
     test_cutoff_floating_bit!(1, 6, 0, vec![1], 0, "1 . [6]");
     test_cutoff_fixed_position!(1, 6, 0, vec![], 0, "1 (6) .");
     test_cutoff_floating_position!(1, 6, 0, vec![1], 0, "1 . (6)");
     test_cutoff_fixed_bit!(1, -6, 0, vec![1], 0, "1 [-6] .");
-    test_cutoff_floating_bit!(1, -6, 0, vec![], 0, "1 . [-6]");
+    test_cutoff_floating_bit!(1, -6, 0, vec![1], 0, "1 . [-6]");
     test_cutoff_fixed_position!(1, -6, 0, vec![1], 0, "1 (-6) .");
-    test_cutoff_floating_position!(1, -6, 0, vec![], 0, "1 . (-6)");
+    test_cutoff_floating_position!(1, -6, 0, vec![1], 0, "1 . (-6)");
 
     test_cutoff_fixed_bit!(-1, 0, ALLONES, vec![], 0, "-1 [0] .");
     test_cutoff_floating_bit!(-1, 0, ALLONES, vec![], 0, "-1 . [0]");
@@ -367,15 +367,15 @@ fn cutoff() {
 
     let two_nums = u128::from(&BigFixed::construct(0, vec![255, 255], Position(0)).unwrap());
     test_cutoff_fixed_bit!(two_nums, 0, 0, vec![255, 255], 0, "11 [0] .");
-    test_cutoff_floating_bit!(two_nums, 0, 0, vec![], 0, "11 . [0]");
+    test_cutoff_floating_bit!(two_nums, 0, 0, vec![128], 1, "11 . [0]"); // 0b11111111 to 0b10000000
     test_cutoff_fixed_position!(two_nums, 0, 0, vec![255, 255], 0, "11 (0) .");
-    test_cutoff_floating_position!(two_nums, 0, 0, vec![], 0, "11 . (0)");
+    test_cutoff_floating_position!(two_nums, 0, 0, vec![128], 1, "11 . (0)");
     test_cutoff_fixed_bit!(two_nums, 6, 0, vec![255, 255 & (ALLONES << 6)], 0, "11 [6] .");
-    test_cutoff_floating_bit!(two_nums, 6, 0, vec![255 & !3], 1, "11 . [6]"); // 255 is 0b11111111, taking six bits gives 0b11111100
+    test_cutoff_floating_bit!(two_nums, 6, 0, vec![255 & !1], 1, "11 . [6]"); // 255 is 0b11111111, taking six nontrivial bits gives 0b11111110
     test_cutoff_fixed_position!(two_nums, 6, 0, vec![], 0, "11 (6) .");
     test_cutoff_floating_position!(two_nums, 6, 0, vec![255, 255], 0, "11 . (6)");
     test_cutoff_fixed_bit!(two_nums, -6, 0, vec![255, 255], 0, "11 [-6] .");
-    test_cutoff_floating_bit!(two_nums, -6, 0, vec![], 0, "11 . [-6]");
+    test_cutoff_floating_bit!(two_nums, -6, 0, vec![128], 1, "11 . [-6]");
     test_cutoff_fixed_position!(two_nums, -6, 0, vec![255, 255], 0, "11 (-6) .");
-    test_cutoff_floating_position!(two_nums, -6, 0, vec![], 0, "11 . (-6)");
+    test_cutoff_floating_position!(two_nums, -6, 0, vec![128], 1, "11 . (-6)");
 }
