@@ -1,17 +1,19 @@
 use bigfixed::{digit::*, Index, Cutoff, BigFixed};
 
 pub fn main() {
-    let mut x = BigFixed::from(1);
-    let y = BigFixed::from(3);
-    let precision = 5;
-    println!("{} / {} to {} places", x, y, precision);
-    let z = BigFixed::combined_div(&mut x, &y, precision).unwrap();
-    println!("quot\t{}\t{:?}", z, z);
-    println!("rem\t{}\t{:?}", x, x);
-    println!("reconstituted: {}", &z * &y + &x);
+    let big = 0xE2103A85FD47AB2i128;
+    println!("big {}", big);
+    for i in 0..=5 {
+        let a = (big >> (10*i + 4)) as i128;
+        for j in 0..3 {
+            let b = (a << j) * if (j*i) / 2 == 0 {1} else {-1};
+            assert_eq!(BigFixed::from(a * b), BigFixed::from(a) * BigFixed::from(b), "{} {}", i, j);
+            println!("{} x {} = {}", a, b, a*b);
+        }
+    }
 }
 
-/*pub fn rand() -> BigFixed {
+pub fn rand() -> BigFixed {
     BigFixed::from(fastrand::i128(..))
 }
 
@@ -46,7 +48,7 @@ pub fn bit_test() {
     println!("u128\t0\t{}", BigFixed::from(0u128));
     println!("u128\t1\t{}", BigFixed::from(1u128));
     println!("u128\t-1\t{}", BigFixed::from(-1i128 as u128));
-}*/
+}
 
 // to get the compiler to shut up about unused imports
 

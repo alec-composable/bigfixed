@@ -87,7 +87,7 @@ impl BigFixed {
             self[low_pos] &= ALLONES << (DIGITBITS - (significand_len % DIGITBITS));
         }
         let mut exp = (position + exponent_bias)?.value();
-        let max_exp = Index::castsize(usize::from(ALLONES >> (DIGITBITS - exponent_len)))?;
+        let max_exp = Index::castsize((ALLONES >> (DIGITBITS - exponent_len)) as usize)?;
         // saturation cases
         if exp < 0 {
             // exponent too low, setting to zero

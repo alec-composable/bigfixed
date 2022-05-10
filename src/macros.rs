@@ -1,16 +1,48 @@
 #[macro_export]
 macro_rules! unary {
-    // -&a => -a
-    ($op: ident, $op_fn_name: ident, $self_type: ty, $error_type: ty) => {
+    ($op: ident, $op_fn_name: ident, $self_type: ty, $fn_name: ident, $output_type: ty, $error_type: ty) => {
+        // -&a
+        impl $op for &$self_type {
+            type Output = Result<$output_type, $error_type>;
+            fn $op_fn_name(self) -> Result<$output_type, $error_type> {
+                let mut returner = self.clone();
+                returner.$fn_name()?;
+                Ok(returner)
+            }
+        }
+        // -a
         impl $op for $self_type {
             type Output = Result<$self_type, $error_type>;
             fn $op_fn_name(self) -> Result<$self_type, $error_type> {
-                (&self).$op_fn_name()
+                let mut returner = self.clone();
+                returner.$fn_name()?;
+                Ok(returner)
             }
         }
     };
 }
 pub(crate) use unary;
+
+#[macro_export]
+macro_rules! unary_copy {
+    ($op: ident, $op_fn_name: ident, $self_type: ty, $fn_name: ident, $output_type: ty, $error_type: ty) => {
+        // -&a
+        impl $op for &$self_type {
+            type Output = Result<$output_type, $error_type>;
+            fn $op_fn_name(self) -> Result<$output_type, $error_type> {
+                <$self_type>::$fn_name(*self)
+            }
+        }
+        // -a
+        impl $op for $self_type {
+            type Output = Result<$self_type, $error_type>;
+            fn $op_fn_name(self) -> Result<$self_type, $error_type> {
+                <$self_type>::$fn_name(self)
+            }
+        }
+    };
+}
+pub(crate) use unary_copy;
 
 #[macro_export]
 macro_rules! op_assign_to_op {
@@ -83,9 +115,8 @@ macro_rules! op_assign_to_op {
             }
         }
     };
-
-
 }
+pub(crate) use op_assign_to_op;
 
 #[macro_export]
 macro_rules! op_to_op_assign {

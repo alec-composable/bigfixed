@@ -1,4 +1,4 @@
-use crate::{digit::*, Index, BigFixed, BigFixedError, op_assign_to_op};
+use crate::{digit::*, Index, BigFixed, BigFixedError, macros::*};
 
 use std::{
     ops::{
@@ -46,7 +46,7 @@ impl BigFixed {
         Ok(())
     }
 
-    // add_digit but leaves (entire) head unchanged
+    // add_digit but leaves (positionally entire) head unchanged
     pub fn add_digit_drop_overflow(&mut self, d: Digit, position: Index) -> Result<(), BigFixedError> {
         assert!(self.properly_positioned());
         if position >= self.body_high()? {
@@ -262,22 +262,8 @@ op_assign_to_op!(Shr, shr, ShrAssign, shr_assign, BigFixed, usize, BigFixed, Big
 op_assign_to_op!(Sub, sub, SubAssign, sub_assign, BigFixed, BigFixed, BigFixed, BigFixedError);
 
 // additive and bitwise negation are the same thing via the geometric series trick for truncating binary expansions
-
-impl Neg for &BigFixed {
-    type Output = Result<BigFixed, BigFixedError>;
-    fn neg(self) -> Result<BigFixed, BigFixedError> {
-        let mut res = self.clone();
-        res.negate()?;
-        Ok(res)
-    }
-}
-
-impl Not for &BigFixed {
-    type Output = Result<BigFixed, BigFixedError>;
-    fn not(self) -> Result<BigFixed, BigFixedError> {
-        -self
-    }
-}
+unary!(Neg, neg, BigFixed, negate, BigFixed, BigFixedError);
+unary!(Not, not, BigFixed, negate, BigFixed, BigFixedError);
 
 // Rem and RemAssign depend on division
 

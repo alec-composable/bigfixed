@@ -128,6 +128,13 @@ impl Index {
     pub fn bit_value(&self) -> Result<isize, IndexError> {
         return Ok(self.cast_to_bit()?.value())
     }
+    
+    pub fn neg(self) -> Result<Index, IndexError> {
+        match self {
+            Position(x) => Ok(Position(x.checked_neg().ok_or(IntegerCastOverflow)?)),
+            Bit(x) => Ok(Bit(x.checked_neg().ok_or(IntegerCastOverflow)?))
+        }
+    }
 }
 
 // format convention: (position), [bit], so 2[(0)] == 2, 2[(1)] == 0, 2[[0]] = 0, 2[[1]] == 1
@@ -189,18 +196,7 @@ impl From<Index> for usize {
     }
 }
 
-// fails only for the most negative number
-impl Neg for &Index {
-    type Output = Result<Index, IndexError>;
-    fn neg(self) -> Result<Index, IndexError> {
-        match self {
-            Position(x) => Ok(Position(x.checked_neg().ok_or(IntegerCastOverflow)?)),
-            Bit(x) => Ok(Bit(x.checked_neg().ok_or(IntegerCastOverflow)?))
-        }
-    }
-}
-
-unary!(Neg, neg, Index, IndexError);
+unary_copy!(Neg, neg, Index, neg, Index, IndexError);
 
 impl Add for &Index {
     type Output = Result<Index, IndexError>;

@@ -335,7 +335,7 @@ impl fmt::Display for BigFixed {
         if point == 0isize {
             write!(f, "0").ok();
         } else if point < 0isize {
-            write!(f, "0.{}", std::iter::repeat("0").take((-point).unwrap().unsigned_value()).collect::<String>()).ok();
+            write!(f, "0.{}", "0".repeat((-point).unwrap().unsigned_value())).ok();
         }
         for d in digits {
             if point == 0isize {
