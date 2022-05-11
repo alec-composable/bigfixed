@@ -43,7 +43,8 @@ impl BigFixed {
         self.body.truncate(high);
         if self.body.len() > 0 {
             let mut low = 0;
-            while self.body[low] == 0 {
+            let len = self.body.len();
+            while low < len && self.body[low] == 0 {
                 low += 1;
             }
             self.body.drain(0..low);
@@ -135,8 +136,8 @@ impl BigFixed {
         }
         let low = low.cast_to_position();
         let high = high.cast_to_position();
-        let shifted_low = (low.cast_to_position() - self.position)?;
-        let shifted_high = (high.cast_to_position() - self.position)?;
+        let shifted_low = (low - self.position)?;
+        let shifted_high = (high - self.position)?;
         let add_low = (-shifted_low)?.unsigned_value();
         let add_high = (shifted_high - Index::castsize(self.body.len())?)?.unsigned_value();
         self.position = min(low, self.position);
@@ -147,7 +148,7 @@ impl BigFixed {
                 self.body.splice(0..0, repeat(0).take(add_low));
             }
             if add_high > 0 {
-                self.body.resize(shifted_high.into(), self.head);
+                self.body.resize(self.body.len() + add_high, self.head);
             }
             Ok(true)
         } else {

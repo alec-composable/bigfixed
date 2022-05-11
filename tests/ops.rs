@@ -145,7 +145,12 @@ fn add() {
             + BigFixed::construct(0, vec![1], Index::Position(-3)).unwrap(),
         BigFixed::construct(0, vec![ALLONES, 0, 0, 0, 0, 1], Index::Position(-4)).unwrap(),
         "9.9999 + 0.001"
-    )
+    );
+    assert_eq!(
+        BigFixed::from(1).shift(Index::Position(5)).unwrap() + BigFixed::from(0),
+        BigFixed::from(1).shift(Index::Position(5)).unwrap(),
+        "10000 + 0"
+    );
 }
 
 #[test]
@@ -187,4 +192,11 @@ fn mul() {
         BigFixed::construct(ALLONES, vec![1, 1, 0, ALLONES, !1], Index::Position(-3)).unwrap(),
         "0.0999 * -110 == -10.989"
     )
+}
+
+#[test]
+fn div() {
+    //let top = BigFixed::from(1).shift(Index::Position(5));
+    //let bottom = BigFixed::from(17).shift(Index::Position(-3));
+
 }

@@ -1,16 +1,13 @@
 use bigfixed::{digit::*, Index, Cutoff, BigFixed};
 
 pub fn main() {
-    let big = 0xE2103A85FD47AB2i128;
-    println!("big {}", big);
-    for i in 0..=5 {
-        let a = (big >> (10*i + 4)) as i128;
-        for j in 0..3 {
-            let b = (a << j) * if (j*i) / 2 == 0 {1} else {-1};
-            assert_eq!(BigFixed::from(a * b), BigFixed::from(a) * BigFixed::from(b), "{} {}", i, j);
-            println!("{} x {} = {}", a, b, a*b);
-        }
-    }
+    let mut top = BigFixed::from(1).shift(Index::Position(5)).unwrap();
+    let bottom = BigFixed::from(17);
+    println!("{} / {}", top, bottom);
+    let quot = BigFixed::combined_div(&mut top, &bottom, 0).unwrap();
+    println!("quot {}", quot);
+    println!("rem {}", top);
+    println!("{}", (quot * bottom) + top);
 }
 
 pub fn rand() -> BigFixed {

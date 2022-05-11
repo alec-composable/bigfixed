@@ -27,7 +27,7 @@ impl Index<isize> for BigFixed {
 impl IndexMut<Indx> for BigFixed {
     fn index_mut(&mut self, position: Indx) -> &mut Digit {
         let position = position.cast_to_position();
-        self.ensure_valid_position(position).ok();
+        self.ensure_valid_position(position).unwrap();
         self.body.index_mut(usize::from((position - self.position).unwrap()))
     }
 }

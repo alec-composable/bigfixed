@@ -19,6 +19,8 @@ impl BigFixed {
     // Add digit into position and handle carries
     pub fn add_digit(&mut self, d: Digit, position: Index) -> Result<(), BigFixedError> {
         assert!(self.properly_positioned());
+        //println!("self {:?}", self);
+        //println!("+ {} pos {}", d, position);
         if let Index::Bit(_b) = position {
             panic!("bit precision add digit not yet supported");
             // split d into two components then add by digit instead
@@ -43,12 +45,15 @@ impl BigFixed {
                 self[high] = 1;
             }
         };
+        //println!("= {:?}", self);
         Ok(())
     }
 
     // add_digit but leaves (positionally entire) head unchanged
     pub fn add_digit_drop_overflow(&mut self, d: Digit, position: Index) -> Result<(), BigFixedError> {
         assert!(self.properly_positioned());
+        //println!("self {:?}", self);
+        //println!("+ {} pos {} no overflow", d, position);
         if position >= self.body_high()? {
             // already overflows
             return Ok(());
@@ -58,17 +63,21 @@ impl BigFixed {
             // split d into two components then add by digit instead
         }
         self.ensure_valid_position(position)?;
+        //println!("ensured {}: {:b}", position, self);
         let mut res;
         let mut carry;
         add!(self[position], d, res, carry);
         self[position] = res;
         let high = self.body_high()?;
+        //println!("high {}", high);
         let mut on_position = (position + 1isize)?;
         while carry == 1 && on_position < high {
+            //println!("carrying {}", on_position);
             add!(self[on_position], 1, res, carry);
             self[on_position] = res;
             on_position += 1isize;
         }
+        //println!("= {:b}", self);
         Ok(())
     }
 
@@ -95,37 +104,25 @@ impl BigFixed {
 
     fn add_assign(&mut self, other: &BigFixed) -> Result<(), BigFixedError> {
         self.fix_position()?;
+        //println!("{:b} + {:b}", self, other);
         // align self valid range
         let position = min(self.position, other.position);
-        let high = max(self.body_high()?, other.body_high()?);
-        // one extra in case of overflow
-        self.ensure_valid_range(position, (high + 1isize)?)?;
-        
+        // one more in case of overflow
+        let high = (max(self.body_high()?, other.body_high()?) + Index::Position(1))?;
+        //println!("resizing range {}..{}", position, high);
+        self.ensure_valid_range(position, high)?;
+        //println!("resized to {:b}", self);
         // add heads
         self.head ^= other.head;
-
-        let mut res;
-        let mut carry = 0;
-        let mut prev_carry;
         // add bodies
-        for in_body in 0..self.body.len() {
-            prev_carry = carry;
-            add!(self.body[in_body], prev_carry, res, carry);
-            self.body[in_body] = res;
-            // overloading prev_carry
-            add!(self.body[in_body], other[(self.position + in_body)?], res, prev_carry);
-            self.body[in_body] = res;
-            carry += prev_carry;
+        let other_low = other.position.cast_to_position();
+        for i in other_low.value()..high.value() {
+            let p = Index::Position(i);
+            //println!("adding {:b} to {}", other[p], p);
+            self.add_digit(other[p], p)?;
+            //println!("{:?}", self);
         }
-        if carry == 1 {
-            if self.is_neg() {
-                self.head = 0;
-            } else {
-                // overflow
-                self[high] = 1;
-            }
-        }
-        
+
         self.format()
     }
 
@@ -245,7 +242,8 @@ impl BigFixed {
     pub fn sub_assign(&mut self, other: &BigFixed) -> Result<(), BigFixedError> {
         self.negate()?;
         self.add_assign(other)?;
-        self.negate()
+        self.negate()?;
+        Ok(())
     }
 }
 
@@ -308,20 +306,28 @@ impl BigFixed {
             div!(num[(position + 1isize)?], num[position], shifted_denom[position], quot);
             let mut prod = BigFixed::from(quot);
             //println!("quot {}", quot);
+            //println!("prod\t{:?}", prod);
             prod *= &shifted_denom;
             //println!("scaled\t{:?}", prod);
             while &prod < num && quot < ALLONES {
+                //println!("incrementing");
                 quot += 1;
+                //println!("prod\t{:?}", prod);
                 prod += &shifted_denom;
+                //println!("prod\t{:?}", prod);
             }
             while &prod > num && quot > 0 {
+                //println!("decrementing");
                 quot -= 1;
+                //println!("prod\t{:?}", prod);
                 prod -= &shifted_denom;
+                //println!("prod\t{:?}", prod);
             }
             //println!("fixed quot {}", quot);
             //println!("fixed prod {:?}", prod);
             quotient[(position - denom_high_position)?] = quot;
             //println!("quotient\t{:?}", quotient);
+            //println!("pre subtraction {:?} - {:?}", num, prod);
             *num -= &prod;
             //println!("rem\t{:?}", num);
             position -= 1isize;
@@ -347,6 +353,7 @@ impl BigFixed {
             digits.push(shifting.clone());
             shifting = quot;
         }
+        //println!("digits are {:?} pt {}", digits, Index::Position(neg_count));
         Ok((digits, Index::Position(neg_count)))
     }
 
