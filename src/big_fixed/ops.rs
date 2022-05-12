@@ -104,25 +104,20 @@ impl BigFixed {
 
     fn add_assign(&mut self, other: &BigFixed) -> Result<(), BigFixedError> {
         self.fix_position()?;
-        //println!("{:b} + {:b}", self, other);
-        // align self valid range
         let position = min(self.position, other.position);
-        // one more in case of overflow
+        // one more for overflow
         let high = (max(self.body_high()?, other.body_high()?) + Index::Position(1))?;
-        //println!("resizing range {}..{}", position, high);
         self.ensure_valid_range(position, high)?;
-        //println!("resized to {:b}", self);
-        // add heads
-        self.head ^= other.head;
-        // add bodies
         let other_low = other.position.cast_to_position();
         for i in other_low.value()..high.value() {
             let p = Index::Position(i);
-            //println!("adding {:b} to {}", other[p], p);
-            self.add_digit(other[p], p)?;
-            //println!("{:?}", self);
+            self.add_digit_drop_overflow(other[p], p)?;
         }
-
+        self.head = if self[(high - Index::Position(1))?] >= GREATESTBIT {
+            ALLONES
+        } else {
+            0
+        };
         self.format()
     }
 
