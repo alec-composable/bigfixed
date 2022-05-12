@@ -151,6 +151,78 @@ fn add() {
         BigFixed::from(1).shift(Index::Position(5)).unwrap(),
         "10000 + 0"
     );
+    assert_eq!(
+        BigFixed::construct(0, vec![ALLONES, ALLONES], Index::Position(0)).unwrap()
+            + BigFixed::construct(0, vec![1], Index::Position(0)).unwrap(),
+        BigFixed::construct(0, vec![1], Index::Position(2)).unwrap(),
+        "99 + 1"
+    );
+    assert_eq!(
+        BigFixed::construct(0, vec![ALLONES, ALLONES], Index::Position(0)).unwrap()
+            + BigFixed::construct(0, vec![1], Index::Position(1)).unwrap(),
+        BigFixed::construct(0, vec![ALLONES, 0, 1], Index::Position(0)).unwrap(),
+        "99 + 10"
+    );
+    assert_eq!(
+        BigFixed::construct(0, vec![ALLONES, ALLONES], Index::Position(0)).unwrap()
+            + BigFixed::construct(0, vec![1], Index::Position(2)).unwrap(),
+        BigFixed::construct(0, vec![ALLONES, ALLONES, 1], Index::Position(0)).unwrap(),
+        "99 + 100"
+    );
+    assert_eq!(
+        BigFixed::construct(0, vec![ALLONES, ALLONES], Index::Position(0)).unwrap()
+            + BigFixed::construct(ALLONES, vec![], Index::Position(0)).unwrap(),
+        BigFixed::construct(0, vec![ALLONES - 1, ALLONES], Index::Position(0)).unwrap(),
+        "99 + -1"
+    );
+    assert_eq!(
+        BigFixed::construct(0, vec![ALLONES, ALLONES], Index::Position(0)).unwrap()
+            + BigFixed::construct(ALLONES, vec![], Index::Position(1)).unwrap(),
+        BigFixed::construct(0, vec![ALLONES, ALLONES - 1], Index::Position(0)).unwrap(),
+        "99 + -10"
+    );
+    assert_eq!(
+        BigFixed::construct(0, vec![ALLONES, ALLONES], Index::Position(0)).unwrap()
+            + BigFixed::construct(ALLONES, vec![], Index::Position(2)).unwrap(),
+        BigFixed::construct(ALLONES, vec![], Index::Position(0)).unwrap(),
+        "99 + -100"
+    );
+    assert_eq!(
+        BigFixed::construct(ALLONES, vec![1, 0], Index::Position(0)).unwrap()
+            + BigFixed::construct(0, vec![1], Index::Position(0)).unwrap(),
+        BigFixed::construct(ALLONES, vec![2, 0], Index::Position(0)).unwrap(),
+        "-99 + 1"
+    );
+    assert_eq!(
+        BigFixed::construct(ALLONES, vec![1, 0], Index::Position(0)).unwrap()
+            + BigFixed::construct(0, vec![1], Index::Position(1)).unwrap(),
+        BigFixed::construct(ALLONES, vec![1, 1], Index::Position(0)).unwrap(),
+        "-99 + 10"
+    );
+    assert_eq!(
+        BigFixed::construct(ALLONES, vec![1, 0], Index::Position(0)).unwrap()
+            + BigFixed::construct(0, vec![1], Index::Position(2)).unwrap(),
+        BigFixed::construct(0, vec![1], Index::Position(0)).unwrap(),
+        "-99 + 100"
+    );
+    assert_eq!(
+        BigFixed::construct(ALLONES, vec![1, 0], Index::Position(0)).unwrap()
+            + BigFixed::construct(ALLONES, vec![], Index::Position(0)).unwrap(),
+        BigFixed::construct(ALLONES, vec![], Index::Position(2)).unwrap(),
+        "-99 + -1"
+    );
+    assert_eq!(
+        BigFixed::construct(ALLONES, vec![1, 0], Index::Position(0)).unwrap()
+            + BigFixed::construct(ALLONES, vec![], Index::Position(1)).unwrap(),
+        BigFixed::construct(ALLONES, vec![1, ALLONES, !1], Index::Position(0)).unwrap(),
+        "-99 + -10"
+    );
+    assert_eq!(
+        BigFixed::construct(ALLONES, vec![1, 0], Index::Position(0)).unwrap()
+            + BigFixed::construct(ALLONES, vec![], Index::Position(2)).unwrap(),
+        BigFixed::construct(ALLONES, vec![1, 0, !1], Index::Position(0)).unwrap(),
+        "-99 + -100"
+    );
 }
 
 #[test]
