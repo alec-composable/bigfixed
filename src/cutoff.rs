@@ -25,7 +25,9 @@ use std::{cmp::{PartialEq}, fmt};
 pub enum Rounding {
     Floor,
     Ceiling,
-    Round
+    Round,
+    TowardsZero,
+    AwayFromZero
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]

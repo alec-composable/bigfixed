@@ -1,6 +1,87 @@
-use bigfixed::{digit::*, Index, Cutoff, cutoff::*, BigFixed};
+use bigfixed::{digit::*, Index, Index::*, Cutoff, cutoff::*, BigFixed};
 
 pub fn main() {
+    #[allow(unused_macros)]
+    macro_rules! test_cutoff_fixed_bit {
+        ($src: expr, $bit: expr, $round: ident, $head: expr, $body: expr, $position: expr, $msg: expr) => {
+            let mut src = BigFixed::from($src);
+            src.cutoff(Cutoff {
+                fixed: Some(Index::Bit($bit)),
+                floating: None,
+                round: Rounding::$round
+            }).unwrap();
+            assert_eq!(
+                src,
+                BigFixed {
+                    head: $head,
+                    body: $body,
+                    position: Position($position)
+                },
+                $msg
+            );
+        };
+    }
+    #[allow(unused_macros)]
+    macro_rules! test_cutoff_floating_bit {
+        ($src: expr, $bit: expr, $round: ident, $head: expr, $body: expr, $position: expr, $msg: expr) => {
+            let mut src = BigFixed::from($src);
+            src.cutoff(Cutoff {
+                fixed: None,
+                floating: Some(Index::Bit($bit)),
+                round: Rounding::$round
+            }).unwrap();
+            assert_eq!(
+                src,
+                BigFixed {
+                    head: $head,
+                    body: $body,
+                    position: Position($position)
+                },
+                $msg
+            );
+        };
+    }
+    #[allow(unused_macros)]
+    macro_rules! test_cutoff_fixed_position {
+        ($src: expr, $pos: expr, $round: ident, $head: expr, $body: expr, $position: expr, $msg: expr) => {
+            let mut src = BigFixed::from($src);src.cutoff(Cutoff {
+                fixed: Some(Index::Position($pos)),
+                floating: None,
+                round: Rounding::$round
+            }).unwrap();
+            assert_eq!(
+                src,
+                BigFixed {
+                    head: $head,
+                    body: $body,
+                    position: Position($position)
+                },
+                $msg
+            );
+        };
+    }
+    #[allow(unused_macros)]
+    macro_rules! test_cutoff_floating_position {
+        ($src: expr, $pos: expr, $round: ident, $head: expr, $body: expr, $position: expr, $msg: expr) => {
+            let mut src = BigFixed::from($src);src.cutoff(Cutoff {
+                fixed: None,
+                floating: Some(Index::Position($pos)),
+                round: Rounding::$round
+            }).unwrap();
+            assert_eq!(
+                src,
+                BigFixed {
+                    head: $head,
+                    body: $body,
+                    position: Position($position)
+                },
+                $msg
+            );
+        };
+    }
+    let two_nums = u128::from(&BigFixed::construct(0, vec![255, 127], Position(0)).unwrap());
+    test_cutoff_fixed_position!(two_nums, 5, Floor, 0, vec![], 0, "11 (5) . f");
+    test_cutoff_fixed_position!(two_nums, 5, Ceiling, 0, vec![1], 5, "11 (5) . c");
 }
 
 pub fn rand() -> BigFixed {

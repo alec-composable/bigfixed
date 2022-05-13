@@ -236,46 +236,6 @@ impl BigFixed {
         }
     }
 
-    pub fn cutoff_fixed_bit(&mut self, b: isize) -> Result<(), BigFixedError> {
-        self.cutoff(
-            Cutoff {
-                fixed: Some(Index::Bit(b)),
-                floating: None,
-                round: Rounding::Floor
-            }
-        )
-    }
-
-    pub fn cutoff_fixed_position(&mut self, p: isize) -> Result<(), BigFixedError> {
-        self.cutoff(
-            Cutoff {
-                fixed: Some(Index::Position(p)),
-                floating: None,
-                round: Rounding::Floor
-            }
-        )
-    }
-
-    pub fn cutoff_floating_bit(&mut self, b: isize) -> Result<(), BigFixedError> {
-        self.cutoff(
-            Cutoff {
-                fixed: None,
-                floating: Some(Index::Bit(b)),
-                round: Rounding::Floor
-            }
-        )
-    }
-
-    pub fn cutoff_floating_position(&mut self, p: isize) -> Result<(), BigFixedError> {
-        self.cutoff(
-            Cutoff {
-                fixed: None,
-                floating: Some(Index::Position(p)),
-                round: Rounding::Floor
-            }
-        )
-    }
-
     pub fn greatest_bit_position(&self) -> Result<Index, BigFixedError> {
         // zero is special, just return 0
         if self.is_zero() {
@@ -295,30 +255,76 @@ impl BigFixed {
 
 impl CutsOff for BigFixed {
     fn cutoff(&mut self, cutoff: Cutoff) -> Result<(), BigFixedError> {
-        //println!("{} cutting off {}", self, cutoff);
         self.fix_position()?;
-        //println!("fixed pos {}", self);
         let cutoff_index = self.cutoff_index(cutoff)?;
-        //println!("cutoff index {}", cutoff_index);
         let as_bit = cutoff_index.cast_to_bit()?;
         let as_pos = cutoff_index.cast_to_position();
-        //println!("that is {} {}", as_bit, as_pos);
+        let increment = match cutoff.round {
+            Rounding::Floor => false,
+            Rounding::Round => self[(as_bit - Index::Bit(1))?] > 0,
+            Rounding::Ceiling => {
+                if self.position >= as_bit {
+                    false
+                } else {
+                    let mut has_value = false;
+                    for p in self.position.value()..as_pos.value() {
+                        if self[Index::Position(p)] != 0 {
+                            has_value = true;
+                            break;
+                        }
+                    }
+                    let diff = as_bit.bit_position_excess();
+                    if diff > 0 {
+                        has_value = has_value || (self[as_pos] & (ALLONES >> (DIGITBITS as isize - diff)) > 0);
+                    }
+                    has_value
+                }
+            },
+            Rounding::TowardsZero => {
+                if self.is_neg() {
+                    return self.cutoff(Cutoff {
+                        fixed: cutoff.fixed,
+                        floating: cutoff.floating,
+                        round: Rounding::Floor
+                    });
+                } else {
+                    return self.cutoff(Cutoff {
+                        fixed: cutoff.fixed,
+                        floating: cutoff.floating,
+                        round: Rounding::Ceiling
+                    })
+                }
+            },
+            Rounding::AwayFromZero => {
+                if self.is_neg() {
+                    return self.cutoff(Cutoff {
+                        fixed: cutoff.fixed,
+                        floating: cutoff.floating,
+                        round: Rounding::Ceiling
+                    });
+                } else {
+                    return self.cutoff(Cutoff {
+                        fixed: cutoff.fixed,
+                        floating: cutoff.floating,
+                        round: Rounding::Floor
+                    })
+                }
+            }
+        };
         self.position = min(self.position, as_pos);
-        //println!("cut off tail {}", self);
         if as_pos > self.position {
-            //println!("draining {}", min(self.body.len(), (as_pos - self.position)?.into()));
             self.body.drain(0..min(self.body.len(), (as_pos - self.position)?.into()));
             self.position = as_pos;
-            //println!("drained body {}", self);
         }
         let diff = (as_bit - as_pos)?.value();
         if diff > 0 {
-            //println!("diffing {}", diff);
             if self.body.len() == 0 {
                 self.body.push(self.head);
             }
-            let len = self.body.len();
-            self.body[len - 1] &= ALLONES << diff;
+            self[as_pos] &= ALLONES << diff;
+        }
+        if increment {
+            self.add_digit(1, as_bit)?;
         }
         self.format()?;
         Ok(())

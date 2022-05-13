@@ -19,11 +19,15 @@ impl BigFixed {
     // Add digit into position and handle carries
     pub fn add_digit(&mut self, d: Digit, position: Index) -> Result<(), BigFixedError> {
         assert!(self.properly_positioned());
-        //println!("self {:?}", self);
-        //println!("+ {} pos {}", d, position);
-        if let Index::Bit(_b) = position {
-            panic!("bit precision add digit not yet supported");
-            // split d into two components then add by digit instead
+        if let Index::Bit(_) = position {
+            let diff = position.bit_position_excess();
+            if diff == 0 {
+                return self.add_digit(d, position.cast_to_position());
+            }
+            let as_position = position.cast_to_position();
+            self.add_digit(d >> (DIGITBITS as isize - diff), (as_position + Index::Position(1))?)?;
+            self.add_digit(d << diff, as_position)?;
+            return Ok(())
         }
         self.ensure_valid_position(position)?;
         let mut res;
@@ -45,39 +49,37 @@ impl BigFixed {
                 self[high] = 1;
             }
         };
-        //println!("= {:?}", self);
         Ok(())
     }
 
     // add_digit but leaves (positionally entire) head unchanged
     pub fn add_digit_drop_overflow(&mut self, d: Digit, position: Index) -> Result<(), BigFixedError> {
         assert!(self.properly_positioned());
-        //println!("self {:?}", self);
-        //println!("+ {} pos {} no overflow", d, position);
         if position >= self.body_high()? {
             // already overflows
             return Ok(());
         }
         if let Index::Bit(_b) = position {
-            panic!("bit precision add digit not yet supported");
-            // split d into two components then add by digit instead
+            if let Index::Bit(_) = position {
+                let diff = position.bit_position_excess();
+                let as_position = position.cast_to_position();
+                self.add_digit_drop_overflow(d >> (DIGITBITS as isize - diff), (as_position + Index::Position(1))?)?;
+                self.add_digit_drop_overflow(d << diff, as_position)?;
+                return Ok(())
+            }
         }
         self.ensure_valid_position(position)?;
-        //println!("ensured {}: {:b}", position, self);
         let mut res;
         let mut carry;
         add!(self[position], d, res, carry);
         self[position] = res;
         let high = self.body_high()?;
-        //println!("high {}", high);
         let mut on_position = (position + 1isize)?;
         while carry == 1 && on_position < high {
-            //println!("carrying {}", on_position);
             add!(self[on_position], 1, res, carry);
             self[on_position] = res;
             on_position += 1isize;
         }
-        //println!("= {:b}", self);
         Ok(())
     }
 
