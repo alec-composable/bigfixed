@@ -1,4 +1,4 @@
-use crate::{digit::*, Index, Cutoff, CutsOff, BigFixed, BigFixedError};
+use crate::{digit::*, Index, Cutoff, cutoff::*, BigFixed, BigFixedError};
 
 use std::{convert::{From}, cmp::{max}};
 
@@ -81,7 +81,8 @@ impl BigFixed {
         let low_pos = (-Index::Bit(Index::castsize(significand_len + DIGITBITS - 1)?))?;
         self.cutoff(Cutoff{
             fixed: Some(low_pos),
-            floating: None
+            floating: None,
+            round: Rounding::Floor
         })?;
         if self.body.len() > 0 {
             self[low_pos] &= ALLONES << (DIGITBITS - (significand_len % DIGITBITS));
@@ -92,17 +93,11 @@ impl BigFixed {
         if exp < 0 {
             // exponent too low, setting to zero
             exp = 0;
-            self.cutoff(Cutoff{
-                fixed: Some(Index::Position(0)),
-                floating: None
-            })?;
+            self.clear();
         } else if exp > max_exp {
             // exponent too high, setting to infty
             exp = max_exp;
-            self.cutoff(Cutoff{
-                fixed: Some(Index::Position(0)),
-                floating: None
-            })?;
+            self.clear();
         }
         self |= &BigFixed::from(exp);
         self = self.shift((-Index::Bit(Index::castsize(exponent_len)?))?)?;

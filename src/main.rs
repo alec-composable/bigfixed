@@ -1,13 +1,6 @@
-use bigfixed::{digit::*, Index, Cutoff, BigFixed};
+use bigfixed::{digit::*, Index, Cutoff, cutoff::*, BigFixed};
 
 pub fn main() {
-    let mut top = BigFixed::from(1).shift(Index::Position(5)).unwrap();
-    let bottom = BigFixed::from(17);
-    println!("{} / {}", top, bottom);
-    let quot = BigFixed::combined_div(&mut top, &bottom, 10).unwrap();
-    println!("quot {}", quot);
-    println!("rem {}", top);
-    println!("{}", (quot * bottom) + top);
 }
 
 pub fn rand() -> BigFixed {
@@ -60,7 +53,8 @@ pub fn trivial_index() -> Index {
 pub fn trivial_cutoff() -> Cutoff {
     Cutoff {
         fixed: None,
-        floating: None
+        floating: None,
+        round: Rounding::Floor
     }
 }
 

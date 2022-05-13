@@ -1,4 +1,4 @@
-use crate::{digit::*, Index, IndexError, Cutoff, CutsOff};
+use crate::{digit::*, Index, IndexError, Cutoff, cutoff::*};
 
 use std::{fmt, ops as stdops, iter::{repeat}, cmp::{max, min}, convert::From};
 
@@ -103,15 +103,7 @@ impl BigFixed {
 
     pub fn format_c(&mut self, cutoff: Cutoff) -> Result<(), BigFixedError> {
         self.format()?;
-        if self.body.len() == 0 && !self.is_zero() {
-            match cutoff.fixed {
-                None => {},
-                Some(x) => if self.position < x {
-                    self.position = x;
-                }
-            }
-        }
-        Ok(())
+        self.cutoff(cutoff)
     }
 
     pub fn construct(head: Digit, body: Vec<Digit>, position: Index) -> Result<BigFixed, BigFixedError> {
@@ -200,6 +192,10 @@ impl BigFixed {
         self.position = src.position;
     }
 
+    pub fn clear(&mut self) {
+        self.overwrite(&BigFixed::ZERO);
+    }
+
     pub fn shift(mut self, shift: Index) -> Result<BigFixed, BigFixedError> {
         self.position += shift;
         self.format()?;
@@ -244,7 +240,8 @@ impl BigFixed {
         self.cutoff(
             Cutoff {
                 fixed: Some(Index::Bit(b)),
-                floating: None
+                floating: None,
+                round: Rounding::Floor
             }
         )
     }
@@ -253,7 +250,8 @@ impl BigFixed {
         self.cutoff(
             Cutoff {
                 fixed: Some(Index::Position(p)),
-                floating: None
+                floating: None,
+                round: Rounding::Floor
             }
         )
     }
@@ -262,7 +260,8 @@ impl BigFixed {
         self.cutoff(
             Cutoff {
                 fixed: None,
-                floating: Some(Index::Bit(b))
+                floating: Some(Index::Bit(b)),
+                round: Rounding::Floor
             }
         )
     }
@@ -271,7 +270,8 @@ impl BigFixed {
         self.cutoff(
             Cutoff {
                 fixed: None,
-                floating: Some(Index::Position(p))
+                floating: Some(Index::Position(p)),
+                round: Rounding::Floor
             }
         )
     }

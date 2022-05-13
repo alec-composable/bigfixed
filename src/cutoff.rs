@@ -19,27 +19,20 @@
 
 use crate::{Index, BigFixedError};
 
-use std::{convert::{From}, cmp::{PartialEq}, fmt};
+use std::{cmp::{PartialEq}, fmt};
 
-#[derive(Copy, Clone, Eq, Debug)]
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+pub enum Rounding {
+    Floor,
+    Ceiling,
+    Round
+}
+
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
 pub struct Cutoff {
     pub fixed: Option<Index>,
-    pub floating: Option<Index>
-}
-
-impl From<(Index, Index)> for Cutoff {
-    fn from((fixed, floating): (Index, Index)) -> Cutoff {
-        Cutoff {
-            fixed: Some(fixed),
-            floating: Some(floating.saturating_nonnegative())
-        }
-    }
-}
-
-impl PartialEq for Cutoff {
-    fn eq(&self, other: &Cutoff) -> bool {
-        self.fixed == other.fixed && self.floating == other.floating
-    }
+    pub floating: Option<Index>,
+    pub round: Rounding
 }
 
 pub trait CutsOff {
