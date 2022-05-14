@@ -104,7 +104,7 @@ impl BigFixed {
         }
     }
 
-    fn add_assign(&mut self, other: &BigFixed) -> Result<(), BigFixedError> {
+    pub fn add_assign(&mut self, other: &BigFixed) -> Result<(), BigFixedError> {
         self.fix_position()?;
         let position = min(self.position, other.position);
         // one more for overflow
@@ -335,7 +335,7 @@ impl BigFixed {
         Ok(quotient)
     }
 
-    pub fn to_digits(&self, base: &BigFixed) -> Result<(Vec<BigFixed>, Index), BigFixedError> {
+    pub fn to_digits(&self, base: &BigFixed) -> Result<(Vec<BigFixed>, isize), BigFixedError> {
         let mut shifting = self.abs()?.clone();
         let mut neg_count: isize = 0;
         //println!("to digits\t{:?}", shifting);
@@ -351,10 +351,10 @@ impl BigFixed {
             shifting = quot;
         }
         //println!("digits are {:?} pt {}", digits, Index::Position(neg_count));
-        Ok((digits, Index::Position(neg_count)))
+        Ok((digits, neg_count))
     }
 
-    pub fn to_digits_10(&self) -> Result<(Vec<i32>, Index), BigFixedError> {
+    pub fn to_digits_10(&self) -> Result<(Vec<i32>, isize), BigFixedError> {
         let (big_digits, point) = self.to_digits(&BigFixed::from(10))?;
         let digits: Vec<i32> = big_digits.iter().map(|x| i32::from(x)).collect();
         Ok((digits, point))

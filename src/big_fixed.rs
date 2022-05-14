@@ -5,7 +5,7 @@ use std::{fmt, ops as stdops, iter::{repeat}, cmp::{max, min}, convert::From};
 pub mod index_ops;
 pub mod convert;
 pub mod ops;
-//pub mod ops_c;
+pub mod ops_c;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum BigFixedError {
@@ -99,11 +99,6 @@ impl BigFixed {
             Index::Position(_) => true,
             Index::Bit(_) => false
         }
-    }
-
-    pub fn format_c(&mut self, cutoff: Cutoff) -> Result<(), BigFixedError> {
-        self.format()?;
-        self.cutoff(cutoff)
     }
 
     pub fn construct(head: Digit, body: Vec<Digit>, position: Index) -> Result<BigFixed, BigFixedError> {
@@ -337,12 +332,12 @@ impl fmt::Display for BigFixed {
             return write!(f, "-{}", (-self).unwrap());
         };
         let (mut digits, mut point) = self.to_digits_10().unwrap();
-        point = (digits.len() - point).unwrap();
+        point = Index::castsize(digits.len()).unwrap() - point;
         digits.reverse();
-        if point == 0isize {
+        if point == 0 {
             write!(f, "0").ok();
-        } else if point < 0isize {
-            write!(f, "0.{}", "0".repeat((-point).unwrap().unsigned_value())).ok();
+        } else if point < 0 {
+            write!(f, "0.{}", "0".repeat(Index::uncastsize(-point).unwrap())).ok();
         }
         for d in digits {
             if point == 0isize {
@@ -351,6 +346,7 @@ impl fmt::Display for BigFixed {
             point -= 1isize;
             write!(f, "{}", d).ok();
         }
+        write!(f, "{}", "0".repeat(Index::saturating_unsigned(point))).ok();
         write!(f, "")
     }
 }

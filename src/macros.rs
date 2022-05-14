@@ -119,6 +119,98 @@ macro_rules! op_assign_to_op {
 pub(crate) use op_assign_to_op;
 
 #[macro_export]
+macro_rules! cutoff_op {
+    // op_assign_to_op
+    (
+        $op: ident, $op_fn_name: ident, $op_c_fn_name: ident,
+        $op_assign: ident, $op_assign_fn_name: ident, $op_assign_c_fn_name: ident,
+        $self_type: ty, $other_type: ty, $cutoff_type: ty, $cutoff_fn_name: ident,
+        $result_type: ty, $error_type: ty
+    ) => {
+        // &a += &b
+        impl $self_type {
+            pub fn $op_assign_c_fn_name(&mut self, other: &$other_type, cutoff: $cutoff_type) -> Result<(), $error_type> {
+                self.$op_assign_fn_name(other)?;
+                self.$cutoff_fn_name(cutoff)
+            }
+        }
+        // a += &b
+        impl $op_assign<(&$other_type, $cutoff_type)> for $self_type {
+            fn $op_assign_fn_name(&mut self, (other, cutoff): (&$other_type, $cutoff_type)) {
+                <$self_type>::$op_assign_c_fn_name(self, other, cutoff).unwrap();
+            }
+        }
+
+        // a += b
+        impl $op_assign<($other_type, $cutoff_type)> for $self_type {
+            fn $op_assign_fn_name(&mut self, (other, cutoff): ($other_type, $cutoff_type)) {
+                <$self_type>::$op_assign_c_fn_name(self, &other, cutoff).unwrap();
+            }
+        }
+        
+        // a +. &b
+        impl $self_type {
+            pub fn $op_c_fn_name(&self, other: &$other_type, cutoff: $cutoff_type) -> Result<$result_type, $error_type> {
+                let mut res = self.$op_fn_name(other)?;
+                res.cutoff(cutoff)?;
+                Ok(res)
+            }
+        }
+
+        // &a + &b
+        impl $op<(&$other_type, $cutoff_type)> for &$self_type {
+            type Output = $result_type;
+            fn $op_fn_name(self, (other, cutoff): (&$other_type, $cutoff_type)) -> $result_type {
+                <$self_type>::$op_c_fn_name(self, other, cutoff).unwrap()
+            }
+        }
+
+        // &a + b
+        impl $op<($other_type, $cutoff_type)> for &$self_type {
+            type Output = $result_type;
+            fn $op_fn_name(self, (other, cutoff): ($other_type, $cutoff_type)) -> $result_type {
+                <$self_type>::$op_c_fn_name(self, &other, cutoff).unwrap()
+            }
+        }
+
+        // a + &b
+        impl $op<(&$other_type, $cutoff_type)> for $self_type {
+            type Output = $result_type;
+            fn $op_fn_name(self, (other, cutoff): (&$other_type, $cutoff_type)) -> $result_type {
+                <$self_type>::$op_c_fn_name(&self, other, cutoff).unwrap()
+            }
+        }
+
+        // a + b
+        impl $op<($other_type, $cutoff_type)> for $self_type {
+            type Output = $result_type;
+            fn $op_fn_name(self, (other, cutoff): ($other_type, $cutoff_type)) -> $result_type {
+                <$self_type>::$op_c_fn_name(&self, &other, cutoff).unwrap()
+            }
+        }
+    };
+    // unary with extension
+    (
+        $op: ty, $op_fn_name: ident,
+        $self_type: ty, $self_fn_name: ident, $self_c_fn_name: ident,
+        $cutoff_type: ty, $cutoff_fn_name: ident, $error_type: ty
+    ) => {
+        impl $self_type {
+            pub fn $self_c_fn_name(&mut self, cutoff: $cutoff_type) -> Result<(), $error_type> {
+                self.$self_fn_name()?;
+                self.$cutoff_fn_name(cutoff)
+            }
+        }
+    };
+}
+pub(crate) use cutoff_op;
+
+/*
+cutoff_op!();
+cutoff_op!(Not, not, BigFixed, negate_c, Cutoff, BigFixed, BigFixedError);
+*/
+
+#[macro_export]
 macro_rules! op_to_op_assign {
     // &a + &b => (&a + b; a + &b; a + b; a += &b; a += b)
     (
@@ -159,34 +251,7 @@ macro_rules! op_to_op_assign {
             fn $op_assign_fn_name(&mut self, other: $other_type) {
                 *self = self.$op_fn_name(&other).unwrap()
             }
-        }// */
+        }
     };
 }
 pub(crate) use op_to_op_assign;
-
-#[macro_export]
-macro_rules! cutoff_op {
-    (
-        $op: ident, $op_fn_name: ident,
-        $op_assign: ident, $op_assign_fn_name: ident,
-        $self_type: ty, $other_type: ty, $output_type: ty
-    ) => {
-        impl $op<(&$other_type, Cutoff)> for &$self_type {
-            type Output = $output_type;
-            fn $op_fn_name(self, (other, cutoff): (&$other_type, Cutoff)) -> $output_type {
-                let mut res = self.$op_fn_name(other);
-                res.cutoff(cutoff);
-                res
-            }
-        }
-
-        impl $op_assign<(&$other_type, Cutoff)> for $self_type {
-            fn $op_assign_fn_name(&mut self, (other, cutoff): (&$other_type, Cutoff)) {
-                self.$op_assign_fn_name(other);
-                self.cutoff(cutoff);
-            }
-        }
-    };
-}
-
-//pub(crate) use cutoff_op;
