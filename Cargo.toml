@@ -1,7 +1,11 @@
 [package]
 name = "bigfixed"
-version = "0.1.0"
+version = "0.0.0"
+authors = ["Alec Martin <alec@composable.finance>"]
 edition = "2021"
+description = "Arbitrary precision fixed point numbers"
+repository = "https://github.com/alec-composable/bigfixed"
+license = "MIT OR Apache-2.0"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
