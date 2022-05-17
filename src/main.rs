@@ -1,13 +1,26 @@
 use bigfixed::{digit::*, Index, Cutoff, cutoff::*, BigFixed};
 
 pub fn main() {
-    let mut num = BigFixed::from(1).shift(Index::Bit(100)).unwrap();
-    println!("top {}", num);
-    let denom = BigFixed::from(53);
-    println!("denom {}", denom);
-    let quot = BigFixed::combined_div(&mut num, &denom, 8).unwrap();
-    println!("quot {}", quot);
-    println!("rem {}", num);
+    let a = BigFixed::from(-0.009f64);
+    let b = BigFixed::from(-9f64 * 0.001f64);
+    println!("full a:\t{}", a);
+    println!("full b:\t{}", b);
+
+    let cutoff = Cutoff {
+        fixed: Some(Index::Position(-3)), // equality fails with -4 here
+        floating: None,
+        round: Rounding::Round
+    };
+    let mut a_c = a.clone();
+    let mut b_c = b.clone();
+    a_c.cutoff(cutoff).ok();
+    b_c.cutoff(cutoff).ok();
+    println!("cut a:\t{}", a_c);
+    println!("cut b:\t{}", b_c);
+
+    println!("a vs b full\t{:?}", a.partial_cmp(&b).unwrap());
+    println!("a_c vs b_c:\t{:?}", a_c.partial_cmp(&b_c).unwrap());
+    println!("a vs_c b:\t{:?}", a.partial_cmp_c(&b, cutoff).unwrap());
 }
 
 pub fn rand() -> BigFixed {
