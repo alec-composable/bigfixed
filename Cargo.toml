@@ -7,4 +7,3 @@ edition = "2021"
 
 [dependencies]
 paste = "1.0"
-fastrand = "1.7"
