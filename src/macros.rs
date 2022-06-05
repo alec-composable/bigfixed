@@ -205,11 +205,6 @@ macro_rules! cutoff_op {
 }
 pub(crate) use cutoff_op;
 
-/*
-cutoff_op!();
-cutoff_op!(Not, not, BigFixed, negate_c, Cutoff, BigFixed, BigFixedError);
-*/
-
 #[macro_export]
 macro_rules! op_to_op_assign {
     // &a + &b => (&a + b; a + &b; a + b; a += &b; a += b)
@@ -255,3 +250,147 @@ macro_rules! op_to_op_assign {
     };
 }
 pub(crate) use op_to_op_assign;
+
+#[macro_export]
+macro_rules! scheme_op {
+    (
+        $lifetime: lifetime, $scheme: ty, $output_type: ty,
+        $op: ident, $op_fn_name: ident, $fn_name: ident
+    ) => {
+        impl<$lifetime> $op for &$scheme {
+            type Output = $output_type;
+            fn $op_fn_name(self) -> $scheme {
+                let mut clone = self.clone();
+                clone.$fn_name().unwrap();
+                clone
+            }
+        }
+        
+        impl<$lifetime> $op for $scheme {
+            type Output = $output_type;
+            fn $op_fn_name(self) -> $scheme {
+                (&self).$op_fn_name()
+            }
+        }
+    };
+    (
+        $lifetime: lifetime, $scheme: ty, $output_type: ty,
+        $op_fn_name: ident, $op_assign_fn_name: ident, $op_fn_name_c: ident, $op_assign_fn_name_c: ident,
+        $other_type: ty, $error_type: ty, $value_accessor: ident, $scheme_accessor: ident, $cutoff_type: ident,
+        $op: ident, $op_assign: ident
+    ) => {
+        impl<$lifetime> $scheme {
+            pub fn $op_assign_fn_name(&mut self, other: &$other_type) -> Result<(), $error_type> {
+                self.$value_accessor.$op_assign_fn_name_c(other, self.$scheme_accessor.$cutoff_type)
+            }
+
+            pub fn $op_fn_name(&self, other: &$other_type) -> Result<$output_type, $error_type> {
+                let mut clone = self.clone();
+                clone.$op_assign_fn_name(other)?;
+                Ok(clone)
+            }
+        }
+
+        impl<$lifetime> $op<&$other_type> for &$scheme {
+            type Output = $output_type;
+            fn $op_fn_name(self, other: &$other_type) -> $scheme {
+                <$scheme>::$op_fn_name(&self, other).unwrap()
+            }
+        }
+
+        impl<$lifetime> $op<$other_type> for &$scheme {
+            type Output = $output_type;
+            fn $op_fn_name(self, other: $other_type) -> $scheme {
+                <$scheme>::$op_fn_name(&self, &other).unwrap()
+            }
+        }
+
+        impl<$lifetime> $op<&$other_type> for $scheme {
+            type Output = $output_type;
+            fn $op_fn_name(self, other: &$other_type) -> $scheme {
+                <$scheme>::$op_fn_name(&self, &other).unwrap()
+            }
+        }
+
+        impl<$lifetime> $op<$other_type> for $scheme {
+            type Output = $output_type;
+            fn $op_fn_name(self, other: $other_type) -> $scheme {
+                <$scheme>::$op_fn_name(&self, &other).unwrap()
+            }
+        }
+
+        impl<$lifetime> $op_assign<&$other_type> for $scheme {
+            fn $op_assign_fn_name(&mut self, other: &$other_type) {
+                <$scheme>::$op_assign_fn_name(self, other).unwrap()
+            }
+        }
+
+        impl<$lifetime> $op_assign<$other_type> for $scheme {
+            fn $op_assign_fn_name(&mut self, other: $other_type) {
+                <$scheme>::$op_assign_fn_name(self, &other).unwrap()
+            }
+        }
+    };
+    (
+        $lifetime: lifetime, $scheme: ty, $output_type: ty,
+        $op_fn_name: ident, $op_assign_fn_name: ident, $op_fn_name_c: ident, $op_assign_fn_name_c: ident, $op_fn_name_s: ident, $op_assign_fn_name_s: ident,
+        $other_type: ty, $error_type: ty, $value_accessor: ident, $scheme_accessor: ident, $cutoff_type: ident,
+        $op: ident, $op_assign: ident
+    ) => {
+        scheme_op!(
+            $lifetime, $scheme, $output_type,
+            $op_fn_name, $op_assign_fn_name, $op_fn_name_c, $op_assign_fn_name_c,
+            $other_type, $error_type, $value_accessor, $scheme_accessor, $cutoff_type,
+            $op, $op_assign
+        );
+        impl<$lifetime> $scheme {
+            pub fn $op_assign_fn_name_s(&mut self, other: &$scheme) -> Result<(), $error_type> {
+                self.$op_assign_fn_name(&other.$value_accessor)
+            }
+
+            pub fn $op_fn_name_s(&self, other: &$scheme) -> Result<$output_type, $error_type> {
+                self.$op_fn_name(&other.$value_accessor)
+            }
+        }
+
+        impl<$lifetime> $op<&$scheme> for &$scheme {
+            type Output = $output_type;
+            fn $op_fn_name(self, other: &$scheme) -> $scheme {
+                <$scheme>::$op_fn_name(&self, &other.$value_accessor).unwrap()
+            }
+        }
+
+        impl<$lifetime> $op<$scheme> for &$scheme {
+            type Output = $output_type;
+            fn $op_fn_name(self, other: $scheme) -> $scheme {
+                <$scheme>::$op_fn_name(&self, &other.$value_accessor).unwrap()
+            }
+        }
+
+        impl<$lifetime> $op<&$scheme> for $scheme {
+            type Output = $output_type;
+            fn $op_fn_name(self, other: &$scheme) -> $scheme {
+                <$scheme>::$op_fn_name(&self, &other.$value_accessor).unwrap()
+            }
+        }
+
+        impl<$lifetime> $op<$scheme> for $scheme {
+            type Output = $output_type;
+            fn $op_fn_name(self, other: $scheme) -> $scheme {
+                <$scheme>::$op_fn_name(&self, &other.$value_accessor).unwrap()
+            }
+        }
+
+        impl<$lifetime> $op_assign<&$scheme> for $scheme {
+            fn $op_assign_fn_name(&mut self, other: &$scheme) {
+                self.$op_assign_fn_name_s(other).unwrap();
+            }
+        }
+
+        impl<$lifetime> $op_assign<$scheme> for $scheme {
+            fn $op_assign_fn_name(&mut self, other: $scheme) {
+                self.$op_assign_fn_name_s(&other).unwrap();
+            }
+        }
+    }
+}

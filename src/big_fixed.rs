@@ -6,6 +6,7 @@ pub mod index_ops;
 pub mod convert;
 pub mod ops;
 pub mod ops_c;
+pub mod exp;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum BigFixedError {
@@ -241,15 +242,7 @@ impl BigFixed {
         Ok(Index::Bit(position.bit_value()? - Index::castsize(coefficient.leading_zeros() as usize + 1)?))
     }
 
-    pub const ZERO: BigFixed = BigFixed {
-        head: 0,
-        body: vec![],
-        position: Index::Position(0)
-    };
-}
-
-impl CutsOff for BigFixed {
-    fn cutoff(&mut self, cutoff: Cutoff) -> Result<(), BigFixedError> {
+    pub fn cutoff(&mut self, cutoff: Cutoff) -> Result<(), BigFixedError> {
         self.fix_position()?;
         let cutoff_index = self.cutoff_index(cutoff)?;
         let as_bit = cutoff_index.cast_to_bit()?;
@@ -323,6 +316,18 @@ impl CutsOff for BigFixed {
         }
         self.format()?;
         Ok(())
+    }
+
+    pub const ZERO: BigFixed = BigFixed {
+        head: 0,
+        body: vec![],
+        position: Index::Position(0)
+    };
+}
+
+impl CutsOff for BigFixed {
+    fn cutoff(&mut self, cutoff: Cutoff) -> Result<(), BigFixedError> {
+        self.cutoff(cutoff)
     }
 }
 

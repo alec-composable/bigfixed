@@ -52,6 +52,10 @@ impl BigFixed {
         Ok(())
     }
 
+    pub fn increment(&mut self) -> Result<(), BigFixedError> {
+        self.add_digit(1, Index::Position(0))
+    }
+
     // add_digit but leaves (positionally entire) head unchanged
     pub fn add_digit_drop_overflow(&mut self, d: Digit, position: Index) -> Result<(), BigFixedError> {
         assert!(self.properly_positioned());
@@ -225,13 +229,13 @@ impl BigFixed {
 
     pub fn shl_assign(&mut self, amount: &usize) -> Result<(), BigFixedError> {
         self.position = (self.position + Index::Bit(Index::castsize(*amount)?))?;
-        self.fix_position()?;
+        self.format()?;
         Ok(())
     }
     
     pub fn shr_assign(&mut self, amount: &usize) -> Result<(), BigFixedError> {
         self.position = (self.position - Index::Bit(Index::castsize(*amount)?))?;
-        self.fix_position()?;
+        self.format()?;
         Ok(())
     }
 

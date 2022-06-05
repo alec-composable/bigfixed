@@ -2,3 +2,4 @@
 Cargo.lock
 
 src/main.rs
+gitignore/

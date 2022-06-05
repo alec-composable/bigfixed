@@ -3,7 +3,7 @@
     to avoid computing data which is just going to be cut off but for now we do the easy way
 */
 
-use crate::{digit::*, Index, Cutoff, cutoff::*, BigFixed, BigFixedError, macros::*};
+use crate::{digit::*, Index, Cutoff, BigFixed, BigFixedError, macros::*};
 
 use std::{
     ops::{
