@@ -1,5 +1,5 @@
 /target
 Cargo.lock
 
-src2/main.rs
+src/main.rs
 gitignore/
