@@ -251,6 +251,12 @@ macro_rules! to_float {
                 )
             }
         }
+
+        impl From<&BigFixed> for $type {
+            fn from(x: &BigFixed) -> $type {
+                <$type>::from(x.clone())
+            }
+        }
     }
 }
 

@@ -8,6 +8,7 @@ use std::{
         BitAnd, BitAndAssign,
         BitOr, BitOrAssign,
         BitXor, BitXorAssign,
+        Div, DivAssign,
         Mul, MulAssign,
         Neg, Not,
         Shl, ShlAssign,
@@ -31,11 +32,16 @@ pub struct CutoffBoundBigFixed<'a> {
 }
 
 impl CutoffScheme {
-    pub fn claim(&self, x: BigFixed) -> CutoffBoundBigFixed {
-        CutoffBoundBigFixed {
+    pub fn claim(&self, mut x: BigFixed) -> Result<CutoffBoundBigFixed, BigFixedError> {
+        x.cutoff(self.arithmetic)?;
+        Ok(CutoffBoundBigFixed {
             scheme: self,
             value: x
-        }
+        })
+    }
+
+    pub fn claim_clone(&self, x: &BigFixed) -> Result<CutoffBoundBigFixed, BigFixedError> {
+        self.claim(x.clone())
     }
 }
 
@@ -106,6 +112,147 @@ scheme_op!('a, CutoffBoundBigFixed<'a>, CutoffBoundBigFixed<'a>, Not, not, negat
 call_scheme_op!(Shl, shl, usize);
 call_scheme_op!(Shr, shr, usize);
 call_scheme_op!(Sub, sub);
+
+impl<'a> CutoffBoundBigFixed<'a> {
+    pub fn div_assign(&mut self, bottom: &BigFixed) -> Result<(), BigFixedError> {
+        let top = &mut self.value;
+        let quot = BigFixed::combined_div(top, bottom, self.scheme.arithmetic)?;
+        top.overwrite(&quot);
+        Ok(())
+    }
+}
+
+impl<'a> DivAssign<&BigFixed> for CutoffBoundBigFixed<'a> {
+    fn div_assign(&mut self, other: &BigFixed) {
+        CutoffBoundBigFixed::div_assign(self, other).unwrap();
+    }
+}
+
+impl<'a> DivAssign<BigFixed> for CutoffBoundBigFixed<'a> {
+    fn div_assign(&mut self, other: BigFixed) {
+        CutoffBoundBigFixed::div_assign(self, &other).unwrap();
+    }
+}
+
+impl<'a> DivAssign<&CutoffBoundBigFixed<'a>> for CutoffBoundBigFixed<'a> {
+    fn div_assign(&mut self, other: &CutoffBoundBigFixed<'a>) {
+        CutoffBoundBigFixed::div_assign(self, &other.value).unwrap();
+    }
+}
+
+impl<'a> DivAssign<CutoffBoundBigFixed<'a>> for CutoffBoundBigFixed<'a> {
+    fn div_assign(&mut self, other: CutoffBoundBigFixed<'a>) {
+        CutoffBoundBigFixed::div_assign(self, &other.value).unwrap();
+    }
+}
+
+impl<'a> Div<&BigFixed> for &CutoffBoundBigFixed<'a> {
+    type Output = CutoffBoundBigFixed<'a>;
+    fn div(self, other: &BigFixed) -> CutoffBoundBigFixed<'a> {
+        let mut clone = self.clone();
+        clone /= other;
+        clone
+    }
+}
+
+impl<'a> Div<BigFixed> for &CutoffBoundBigFixed<'a> {
+    type Output = CutoffBoundBigFixed<'a>;
+    fn div(self, other: BigFixed) -> CutoffBoundBigFixed<'a> {
+        let mut clone = self.clone();
+        clone /= other;
+        clone
+    }
+}
+
+impl<'a> Div<&BigFixed> for CutoffBoundBigFixed<'a> {
+    type Output = CutoffBoundBigFixed<'a>;
+    fn div(self, other: &BigFixed) -> CutoffBoundBigFixed<'a> {
+        let mut clone = self.clone();
+        clone /= other;
+        clone
+    }
+}
+
+impl<'a> Div<BigFixed> for CutoffBoundBigFixed<'a> {
+    type Output = CutoffBoundBigFixed<'a>;
+    fn div(self, other: BigFixed) -> CutoffBoundBigFixed<'a> {
+        let mut clone = self.clone();
+        clone /= other;
+        clone
+    }
+}
+
+impl<'a> Div<&CutoffBoundBigFixed<'a>> for &CutoffBoundBigFixed<'a> {
+    type Output = CutoffBoundBigFixed<'a>;
+    fn div(self, other: &CutoffBoundBigFixed<'a>) -> CutoffBoundBigFixed<'a> {
+        let mut clone = self.clone();
+        clone /= other;
+        clone
+    }
+}
+
+impl<'a> Div<CutoffBoundBigFixed<'a>> for &CutoffBoundBigFixed<'a> {
+    type Output = CutoffBoundBigFixed<'a>;
+    fn div(self, other: CutoffBoundBigFixed<'a>) -> CutoffBoundBigFixed<'a> {
+        let mut clone = self.clone();
+        clone /= other;
+        clone
+    }
+}
+
+impl<'a> Div<&CutoffBoundBigFixed<'a>> for CutoffBoundBigFixed<'a> {
+    type Output = CutoffBoundBigFixed<'a>;
+    fn div(self, other: &CutoffBoundBigFixed<'a>) -> CutoffBoundBigFixed<'a> {
+        let mut clone = self.clone();
+        clone /= other;
+        clone
+    }
+}
+
+impl<'a> Div<CutoffBoundBigFixed<'a>> for CutoffBoundBigFixed<'a> {
+    type Output = CutoffBoundBigFixed<'a>;
+    fn div(self, other: CutoffBoundBigFixed<'a>) -> CutoffBoundBigFixed<'a> {
+        let mut clone = self.clone();
+        clone /= other;
+        clone
+    }
+}
+
+impl<'a> Div<&CutoffBoundBigFixed<'a>> for &BigFixed {
+    type Output = CutoffBoundBigFixed<'a>;
+    fn div(self, other: &CutoffBoundBigFixed<'a>) -> CutoffBoundBigFixed<'a> {
+        let mut clone = other.scheme.claim(self.clone()).unwrap();
+        clone /= other;
+        clone
+    }
+}
+
+impl<'a> Div<CutoffBoundBigFixed<'a>> for &BigFixed {
+    type Output = CutoffBoundBigFixed<'a>;
+    fn div(self, other: CutoffBoundBigFixed<'a>) -> CutoffBoundBigFixed<'a> {
+        let mut clone = other.scheme.claim(self.clone()).unwrap();
+        clone /= other;
+        clone
+    }
+}
+
+impl<'a> Div<&CutoffBoundBigFixed<'a>> for BigFixed {
+    type Output = CutoffBoundBigFixed<'a>;
+    fn div(self, other: &CutoffBoundBigFixed<'a>) -> CutoffBoundBigFixed<'a> {
+        let mut clone = other.scheme.claim(self.clone()).unwrap();
+        clone /= other;
+        clone
+    }
+}
+
+impl<'a> Div<CutoffBoundBigFixed<'a>> for BigFixed {
+    type Output = CutoffBoundBigFixed<'a>;
+    fn div(self, other: CutoffBoundBigFixed<'a>) -> CutoffBoundBigFixed<'a> {
+        let mut clone = other.scheme.claim(self.clone()).unwrap();
+        clone /= other;
+        clone
+    }
+}
 
 impl<'a> PartialEq<BigFixed> for CutoffBoundBigFixed<'a> {
     fn eq(&self, other: &BigFixed) -> bool {

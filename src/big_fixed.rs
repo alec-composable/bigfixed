@@ -299,7 +299,6 @@ impl BigFixed {
                 }
             }
         };
-        self.position = min(self.position, as_pos);
         if as_pos > self.position {
             self.body.drain(0..min(self.body.len(), (as_pos - self.position)?.into()));
             self.position = as_pos;

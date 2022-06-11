@@ -92,7 +92,7 @@ cutoff_op!(Neg, neg, BigFixed, negate, negate_c, Cutoff, cutoff, BigFixedError);
 
 // Rem and RemAssign depend on division
 
-impl BigFixed {
+/*impl BigFixed {
     // combined_div
 
     pub fn to_digits_c(&self, base: &BigFixed, max_len: usize) -> Result<(Vec<BigFixed>, isize), BigFixedError> {
@@ -121,7 +121,7 @@ impl BigFixed {
         let digits: Vec<i32> = big_digits.iter().map(|x| i32::from(x)).collect();
         Ok((digits, point))
     }
-}
+}*/
 
 impl BigFixed {
     pub fn partial_cmp_c(&self, other: &BigFixed, cutoff: Cutoff) -> Option<Ordering> {

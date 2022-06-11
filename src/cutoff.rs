@@ -46,3 +46,11 @@ impl fmt::Display for Cutoff {
         write!(f, "({:?}, {:?})", self.fixed, self.floating)
     }
 }
+
+impl Cutoff {
+    pub const INTEGER: Cutoff = Cutoff {
+        fixed: Some(Index::Position(0)),
+        floating: None,
+        round: Rounding::Floor
+    };
+}

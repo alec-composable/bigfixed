@@ -1,4 +1,4 @@
-use crate::{digit::*, Index, BigFixed, BigFixedError, macros::*};
+use crate::{digit::*, Index, Cutoff, BigFixed, BigFixedError, macros::*};
 
 use std::{
     ops::{
@@ -266,21 +266,33 @@ unary!(Not, not, BigFixed, negate, BigFixed, BigFixedError);
 
 // Rem and RemAssign depend on division
 
+// division section --
+
 impl BigFixed {
-    pub fn combined_div(num: &mut BigFixed, denom: &BigFixed, to: usize) -> Result<BigFixed, BigFixedError> {
+    pub fn high_double_digit(&self) -> Result<SignedDoubleDigit, BigFixedError> {
+        assert!(self.properly_positioned(), "improperly positioned");
+        Ok (
+            (
+                ((self[self.body_high()?] as DoubleDigit) << DIGITBITS)
+                | ((self[(self.body_high()? - Index::Position(1))?] as DoubleDigit))
+            ) as SignedDoubleDigit
+        )
+    }
+
+    pub fn combined_div(num: &mut BigFixed, denom: &BigFixed, end: Cutoff) -> Result<BigFixed, BigFixedError> {
         // Iteratively subtract the highest multiple of the highest shift of denom from num, storing into quotient. Num is replaced by the remainder at each step.
         // Go until num (the remainder) is small enough so that num / denom has 0s in all positions >= -to, i.e. num < denom / base^to.
         // sign stuff
         let mut quotient = BigFixed::from(0);
         if &*num < &quotient {
             num.negate()?;
-            quotient = BigFixed::combined_div(num, denom, to)?;
+            quotient = BigFixed::combined_div(num, denom, end)?;
             num.negate()?;
             quotient.negate()?;
             return Ok(quotient);
         }
         if denom < &quotient {
-            quotient = BigFixed::combined_div(num, &(-denom)?, to)?;
+            quotient = BigFixed::combined_div(num, &(-denom)?, end)?;
             num.negate()?;
             quotient.negate()?;
             return Ok(quotient);
@@ -289,23 +301,24 @@ impl BigFixed {
         assert!(&*num >= &quotient && denom >= &quotient, "sign issue");
 
         // starting the actual division
-        // the cutoff is denom * base^-to
-        let mut cutoff = BigFixed::from(1).shift((-Index::Position(Index::castsize(to)?))?)?;
-        cutoff *= denom;
         let denom_tail_len = denom.body.len() - 1;
         let denom_high_position = (denom.body_high()? - 1isize)?;
         let mut shifted_denom = denom.clone();
         let mut position = (num.body_high()? - 1isize)?;
         //println!("num\t{:?}", num);
-        while !num.is_zero() && &*num >= &cutoff {
+        //println!("denom\t{:?}", denom);
+        let mut prod = BigFixed::from(0);
+        while !num.is_zero() && quotient.cutoff_index(end)? <= quotient.position {
             //println!("___________________");
+            //println!("division step {}", position);
+            //println!("looped because {:?} is nonzero and {} <= {}", num, quotient.cutoff_index(end)?, quotient.position);
             shifted_denom.position = (position - denom_tail_len)?;
             //println!("shift d\t{:?}", shifted_denom);
             let mut quot;
             //println!("num\t{:?}", num);
             //println!("position {}", position);
             div!(num[(position + 1isize)?], num[position], shifted_denom[position], quot);
-            let mut prod = BigFixed::from(quot);
+            prod = BigFixed::from(quot);
             //println!("quot {}", quot);
             //println!("prod\t{:?}", prod);
             prod *= &shifted_denom;
@@ -334,8 +347,15 @@ impl BigFixed {
             position -= 1isize;
             //println!("___________________");
         }
-        //println!("done\n");
+        //println!("wrapup cutoff");
         quotient.format()?;
+        // use prod to hold the difference between quotient and its cutoff
+        prod.overwrite(&quotient);
+        quotient.cutoff(end)?;
+        prod -= &quotient;
+        prod *= denom;
+        *num += &prod;
+        //println!("done\n");
         Ok(quotient)
     }
 
@@ -350,7 +370,7 @@ impl BigFixed {
         //println!("to digits starting with {:?} which has been shifted {}", shifting, neg_count);
         let mut digits = vec![];
         while !shifting.is_zero() {
-            let quot = BigFixed::combined_div(&mut shifting, base, 0)?;
+            let quot = BigFixed::combined_div(&mut shifting, base, Cutoff::INTEGER)?;
             digits.push(shifting.clone());
             shifting = quot;
         }
@@ -364,6 +384,8 @@ impl BigFixed {
         Ok((digits, point))
     }
 }
+
+// -- end division section
 
 impl PartialOrd for BigFixed {
     fn partial_cmp(&self, other: &BigFixed) -> Option<Ordering> {
