@@ -67,12 +67,3 @@ macro_rules! build_digit {
 }
 
 build_digit!(16, 32);
-
-#[macro_export]
-macro_rules! binary_formatter {
-    () => {
-        "{:#018b}" // digit bits + 2 for 0b
-    };
-}
-
-pub(crate) use binary_formatter;

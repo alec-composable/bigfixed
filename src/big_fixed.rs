@@ -357,18 +357,21 @@ impl fmt::Display for BigFixed {
 
 impl fmt::Binary for BigFixed {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let mut body_rev = self.body.clone();
-        body_rev.reverse();
-        write!(f, "{:b} [", self.head).ok();
-        let mut first = true;
-        for x in body_rev {
-            if first {
-                first = false;
-            } else {
-                write!(f, ", ").ok();
+        if self.is_neg() {
+            return write!(f, "-{:b}", (-self).unwrap());
+        };
+        let start = self.greatest_bit_position().unwrap().bit_value().unwrap();
+        if start < 0 {
+            write!(f, "{}", "0".repeat(Index::uncastsize(-start).unwrap())).ok();
+            write!(f, ".").ok();
+        };
+        for p in (self.position.bit_value().unwrap()..=start).rev() {
+            //println!("p {}", p);
+            write!(f, "{}", self[Index::Bit(p)]).ok();
+            if p == 0 {
+                write!(f, ".").ok();
             }
-            write!(f, binary_formatter!(), x).ok();
         }
-        write!(f, "] position {}", self.position)
+        Ok(())
     }
 }
