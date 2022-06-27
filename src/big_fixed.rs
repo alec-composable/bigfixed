@@ -1,6 +1,6 @@
 use crate::{digit::*, Index, IndexError, Cutoff, cutoff::*};
 
-use std::{fmt, ops as stdops, iter::{repeat}, cmp::{max, min}, convert::From};
+use std::{fmt, ops as stdops, iter::{repeat}, cmp::{max, min}, convert::From, slice::{IterMut}};
 
 pub mod index_ops;
 pub mod convert;
@@ -148,6 +148,31 @@ impl BigFixed {
     pub fn ensure_valid_position(&mut self, position: Index) -> Result<bool, BigFixedError> {
         let p = position.cast_to_position();
         self.ensure_valid_range(p, (p + 1isize)?)
+    }
+
+    pub fn range_mut_iter(&mut self, low: Index, high: Index) -> Result<IterMut<Digit>, BigFixedError> {
+        self.ensure_valid_range(low, high)?;
+        Ok(self.body.iter_mut())
+    }
+
+    pub fn range_iter(&self, low: Index, high: Index) -> Result<impl Iterator<Item = Digit> + '_,BigFixedError> {
+        assert!(self.properly_positioned());
+        let body_high = self.body_high()?;
+        let low = low.cast_to_position();
+        let keep_low = min(body_high, max(self.position, low));
+        let keep_high = min(high, body_high);
+        let high = high.cast_to_position();
+        Ok(
+            repeat(0).take((self.position - low)?.unsigned_value())
+            .chain(
+                self.body.iter().map(|x| *x)
+                .skip((keep_low - self.position)?.unsigned_value())
+                .take((keep_high - keep_low)?.unsigned_value())
+            )
+            .chain(
+                repeat(self.head).take((high - body_high)?.unsigned_value())
+            )
+        )
     }
 
     pub fn is_neg(&self) -> bool {

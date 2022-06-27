@@ -128,6 +128,10 @@ impl Index {
     pub fn bit_value(&self) -> Result<isize, IndexError> {
         return Ok(self.cast_to_bit()?.value())
     }
+
+    pub fn position_value(&self) -> isize {
+        return self.cast_to_position().value()
+    }
     
     pub fn neg(self) -> Result<Index, IndexError> {
         match self {
