@@ -276,6 +276,53 @@ macro_rules! op_to_op_assign {
 pub(crate) use op_to_op_assign;
 
 #[macro_export]
+macro_rules! op_to_op_assign_parametrized {
+    // &a + &b => (&a + b; a + &b; a + b; a += &b; a += b)
+    (
+        $op: ident, $op_fn_name: ident,
+        $op_assign: ident, $op_assign_fn_name: ident,
+        $parameter: ident, $parameter_bound: path,
+        $self_type: ty, $other_type: ty,
+        $output_type: ty, $error_type: ty
+    ) => {
+        // &a + b
+        impl<$parameter: $parameter_bound> $op<$other_type> for &$self_type {
+            type Output = Result<$output_type, $error_type>;
+            fn $op_fn_name(self, other: $other_type) -> Result<$output_type, $error_type> {
+                self.$op_fn_name(&other)
+            }
+        }
+        // a + &b
+        impl<$parameter: $parameter_bound> $op<&$other_type> for $self_type {
+            type Output = Result<$output_type, $error_type>;
+            fn $op_fn_name(self, other: &$other_type) -> Result<$output_type, $error_type> {
+                (&self).$op_fn_name(other)
+            }
+        }
+        // a + b
+        impl<$parameter: $parameter_bound> $op<$other_type> for $self_type {
+            type Output = Result<$output_type, $error_type>;
+            fn $op_fn_name(self, other: $other_type) -> Result<$output_type, $error_type> {
+                (&self).$op_fn_name(&other)
+            }
+        }
+        // a += &b
+        impl<$parameter: $parameter_bound> $op_assign<&$other_type> for $self_type {
+            fn $op_assign_fn_name(&mut self, other: &$other_type) {
+                *self = self.$op_fn_name(other).unwrap()
+            }
+        }
+        // a += b
+        impl<$parameter: $parameter_bound> $op_assign<$other_type> for $self_type {
+            fn $op_assign_fn_name(&mut self, other: $other_type) {
+                *self = self.$op_fn_name(&other).unwrap()
+            }
+        }
+    };
+}
+pub(crate) use op_to_op_assign_parametrized;
+
+#[macro_export]
 macro_rules! scheme_op {
     (
         $lifetime: lifetime, $scheme: ty, $output_type: ty,

@@ -256,12 +256,13 @@ impl<D: Digit> Add for &Index<D> {
     }
 }
 
-/*op_to_op_assign!(
+op_to_op_assign_parametrized!(
     Add, add,
     AddAssign, add_assign,
+    D, Digit,
     Index<D>, Index<D>,
     Index<D>, IndexError
-);*/
+);
 
 impl<D: Digit> Add<&usize> for &Index<D> {
     type Output = Result<Index<D>, IndexError>;
@@ -278,12 +279,13 @@ impl<D: Digit> Add<&usize> for &Index<D> {
     }
 }
 
-/*op_to_op_assign!(
+op_to_op_assign_parametrized!(
     Add, add,
     AddAssign, add_assign,
+    D, Digit,
     Index<D>, usize,
     Index<D>, IndexError
-);*/
+);
 
 impl<D: Digit> Add<&Index<D>> for usize {
     type Output = Result<Index<D>, IndexError>;
@@ -318,12 +320,13 @@ impl<D: Digit> Add<&isize> for &Index<D> {
     }
 }
 
-/*op_to_op_assign!(
+op_to_op_assign_parametrized!(
     Add, add,
     AddAssign, add_assign,
+    D, Digit,
     Index<D>, isize,
     Index<D>, IndexError
-);*/
+);
 
 impl<D: Digit> Add<&Index<D>> for isize {
     type Output = Result<Index<D>, IndexError>;
@@ -381,12 +384,13 @@ impl<D: Digit> Sub for &Index<D> {
     }
 }
 
-/*op_to_op_assign!(
+op_to_op_assign_parametrized!(
     Sub, sub,
     SubAssign, sub_assign,
+    D, Digit,
     Index<D>, Index<D>,
     Index<D>, IndexError
-);*/
+);
 
 impl<D: Digit> Sub<&usize> for &Index<D> {
     type Output = Result<Index<D>, IndexError>;
@@ -399,12 +403,13 @@ impl<D: Digit> Sub<&usize> for &Index<D> {
     }
 }
 
-/*op_to_op_assign!(
+op_to_op_assign_parametrized!(
     Sub, sub,
     SubAssign, sub_assign,
+    D, Digit,
     Index<D>, usize,
     Index<D>, IndexError
-);*/
+);
 
 impl<D: Digit> Sub<&Index<D>> for usize {
     type Output = Result<Index<D>, IndexError>;
@@ -435,12 +440,13 @@ impl<D: Digit> Sub<&isize> for &Index<D> {
     }
 }
 
-/*op_to_op_assign!(
+op_to_op_assign_parametrized!(
     Sub, sub,
     SubAssign, sub_assign,
+    D, Digit,
     Index<D>, isize,
     Index<D>, IndexError
-);*/
+);
 
 impl<D: Digit> Sub<&Index<D>> for isize {
     type Output = Result<Index<D>, IndexError>;
@@ -498,12 +504,13 @@ impl<D: Digit> Mul for &Index<D> {
     }
 }
 
-/*op_to_op_assign!(
+op_to_op_assign_parametrized!(
     Mul, mul,
     MulAssign, mul_assign,
+    D, Digit,
     Index<D>, Index<D>,
     Index<D>, IndexError
-);*/
+);
 
 impl<D: Digit> Mul<&usize> for &Index<D> {
     type Output = Result<Index<D>, IndexError>;
@@ -516,12 +523,13 @@ impl<D: Digit> Mul<&usize> for &Index<D> {
     }
 }
 
-/*op_to_op_assign!(
+op_to_op_assign_parametrized!(
     Mul, mul,
     MulAssign, mul_assign,
+    D, Digit,
     Index<D>, usize,
     Index<D>, IndexError
-);*/
+);
 
 impl<D: Digit> Mul<&Index<D>> for usize {
     type Output = Result<Index<D>, IndexError>;
@@ -552,12 +560,13 @@ impl<D: Digit> Mul<&isize> for &Index<D> {
     }
 }
 
-/*op_to_op_assign!(
+op_to_op_assign_parametrized!(
     Mul, mul,
     MulAssign, mul_assign,
+    D, Digit,
     Index<D>, isize,
     Index<D>, IndexError
-);*/
+);
 
 impl<D: Digit> Mul<&Index<D>> for isize {
     type Output = Result<Index<D>, IndexError>;
