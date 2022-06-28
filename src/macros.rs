@@ -1,3 +1,5 @@
+#![allow(unused_imports)]
+
 #[macro_export]
 macro_rules! unary {
     ($op: ident, $op_fn_name: ident, $self_type: ty, $fn_name: ident, $output_type: ty, $error_type: ty) => {
@@ -43,6 +45,28 @@ macro_rules! unary_copy {
     };
 }
 pub(crate) use unary_copy;
+
+#[macro_export]
+macro_rules! unary_copy_parametrized {
+    ($op: ident, $op_fn_name: ident, $parameter: ident, $parameter_bound: path, $self_type: ty, $fn_name: ident, $output_type: ty, $error_type: ty) => {
+        // -&a
+        impl<$parameter: $parameter_bound> $op for &$self_type {
+            type Output = Result<$output_type, $error_type>;
+            fn $op_fn_name(self) -> Result<$output_type, $error_type> {
+                <$self_type>::$fn_name(*self)
+            }
+        }
+        // -a
+        impl<$parameter: $parameter_bound> $op for $self_type {
+            type Output = Result<$self_type, $error_type>;
+            fn $op_fn_name(self) -> Result<$self_type, $error_type> {
+                <$self_type>::$fn_name(self)
+            }
+        }
+    };
+}
+pub(crate) use unary_copy_parametrized;
+
 
 #[macro_export]
 macro_rules! op_assign_to_op {

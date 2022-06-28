@@ -2,17 +2,19 @@
 // the smaller types u16/u8 are easier to work with while developing and testing. Hence which one is in use is decided via this macro.
 
 use paste::paste;
+use num_traits::PrimInt;
+use core::{cmp::{PartialEq, Eq}, fmt::{Debug}};
 
-pub trait Digit {
+pub trait Digit: Eq + Debug + Clone + Copy {
     const DIGITBITS: usize;
     const DIGITBYTES: usize;
-    type Digit;
-    type SignedDigit;
+    type Digit: PrimInt;
+    type SignedDigit: PrimInt;
 
     const DOUBLEBITS: usize;
     const DOUBLEBYTES: usize;
-    type DoubleDigit;
-    type SignedDoubleDigit;
+    type DoubleDigit: PrimInt;
+    type SignedDoubleDigit: PrimInt;
 
     const ALLONES: Self::Digit;
     const GREATESTBIT: Self::Digit;
@@ -31,7 +33,8 @@ pub trait Digit {
 macro_rules! build_digit {
     ($bits: expr, $double_bits: expr) => {
         paste!{
-            pub struct [<Digit $bits>] {}
+            #[derive(PartialEq, Eq, Debug, Clone, Copy)]
+            pub struct [<Digit $bits>];
 
             impl Digit for [<Digit $bits>] {
                 const DIGITBITS: usize = $bits;

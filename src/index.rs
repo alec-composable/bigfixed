@@ -29,19 +29,12 @@ pub use std::{
 
 use crate::{digit::*, macros::*};
 
-#[derive(Clone, Copy, Eq)]
-pub enum Index {
-    Position(isize),
-    Bit(isize)
-}
-
-pub use Index::*;
-
 #[derive(Clone, Copy, Eq, PartialEq, Debug)]
 pub enum IndexError {
     AdditionOverflow,
     MultiplicationOverflow,
-    IntegerCastOverflow
+    IntegerCastOverflow,
+    UsedDigitTypeAsIndex
 }
 
 impl fmt::Display for IndexError {
@@ -60,7 +53,16 @@ impl From<TryFromIntError> for IndexError {
 
 pub use IndexError::*;
 
-impl Index {
+#[derive(Clone, Copy, Eq)]
+pub enum Index<D: Digit> {
+    Position(isize),
+    Bit(isize),
+    DigitTypeInUse(D)
+}
+
+pub use Index::*;
+
+impl<D: Digit> Index<D> {
     // fails for very large inputs
     pub fn castsize(x: usize) -> Result<isize, IndexError> {
         Ok(TryFrom::try_from(x)?)
@@ -71,72 +73,82 @@ impl Index {
     }
     // fails for very large inputs
     pub fn position_to_bit(x: isize) -> Result<isize, IndexError> {
-        x.checked_mul(DIGITBITS as isize).ok_or(MultiplicationOverflow)
+        x.checked_mul(D::DIGITBITS as isize).ok_or(MultiplicationOverflow)
     }
 
     pub fn bit_to_position(x: isize) -> isize {
-        x.div_euclid(DIGITBITS as isize)
+        x.div_euclid(D::DIGITBITS as isize)
     }
 
-    pub fn saturating_unsigned(x: isize) -> usize {
-        Index::uncastsize(max(0, x)).unwrap()
+    pub fn saturating_unsigned(x: isize) -> Result<usize, IndexError> {
+        Index::<D>::uncastsize(max(0, x))
     }
 
-    pub fn cast(&self) -> Result<Index, IndexError> {
+    pub fn cast(&self) -> Result<Index<D>, IndexError> {
         match self {
-            Position(x) => Ok(Bit(Index::position_to_bit(*x)?)),
-            Bit(x) => Ok(Bit(Index::bit_to_position(*x)))
+            Position(x) => Ok(Bit(Index::<D>::position_to_bit(*x)?)),
+            Bit(x) => Ok(Bit(Index::<D>::bit_to_position(*x))),
+            DigitTypeInUse(_) => Err(UsedDigitTypeAsIndex)
         }
     }
 
-    pub fn cast_to_position(&self) -> Index {
+    pub fn cast_to_position(&self) -> Result<Index::<D>, IndexError> {
         match self {
-            Position(_) => *self,
-            Bit(x) => Position(Index::bit_to_position(*x))
+            Position(_) => Ok(*self),
+            Bit(x) => Ok(Position(Index::<D>::bit_to_position(*x))),
+            DigitTypeInUse(_) => Err(UsedDigitTypeAsIndex)
         }
     }
 
-    pub fn bit_position_excess(&self) -> isize {
+    pub fn bit_position_excess(&self) -> Result<isize, IndexError> {
         match self {
-            Position(_) => 0,
-            Bit(x) => x.rem_euclid(DIGITBITS as isize)
+            Position(_) => Ok(0),
+            Bit(x) => Ok(x.rem_euclid(D::DIGITBITS as isize)),
+            DigitTypeInUse(_) => Err(UsedDigitTypeAsIndex)
         }
     }
 
-    pub fn cast_to_bit(&self) -> Result<Index, IndexError> {
+    pub fn cast_to_bit(&self) -> Result<Index<D>, IndexError> {
         match self {
-            Position(x) => Ok(Bit(Index::position_to_bit(*x)?)),
-            Bit(_) => Ok(*self)
+            Position(x) => Ok(Bit(Index::<D>::position_to_bit(*x)?)),
+            Bit(_) => Ok(*self),
+            DigitTypeInUse(_) => Err(UsedDigitTypeAsIndex)
         }
     }
 
-    pub fn saturating_nonnegative(&self) -> Index {
+    pub fn saturating_nonnegative(&self) -> Result<Index<D>, IndexError> {
         match self {
-            Position(x) => Position(max(0, *x)),
-            Bit(x) => Bit(max(0, *x))
+            Position(x) => Ok(Position(max(0, *x))),
+            Bit(x) => Ok(Bit(max(0, *x))),
+            DigitTypeInUse(_) => Err(UsedDigitTypeAsIndex)
         }
     }
 
-    pub fn value(&self) -> isize {
-        isize::from(self)
+    pub fn value(&self) -> Result<isize, IndexError> {
+        match self {
+            Position(x) => Ok(*x),
+            Bit(x) => Ok(*x),
+            DigitTypeInUse(_) => Err(UsedDigitTypeAsIndex)
+        }
     }
 
-    pub fn unsigned_value(&self) -> usize {
-        Index::saturating_unsigned(self.value())
+    pub fn unsigned_value(&self) -> Result<usize, IndexError> {
+        Index::<D>::saturating_unsigned(self.value()?)
     }
 
     pub fn bit_value(&self) -> Result<isize, IndexError> {
-        return Ok(self.cast_to_bit()?.value())
+        return self.cast_to_bit()?.value()
     }
 
-    pub fn position_value(&self) -> isize {
-        return self.cast_to_position().value()
+    pub fn position_value(&self) -> Result<isize, IndexError> {
+        return self.cast_to_position()?.value()
     }
     
-    pub fn neg(self) -> Result<Index, IndexError> {
+    pub fn neg(self) -> Result<Index<D>, IndexError> {
         match self {
             Position(x) => Ok(Position(x.checked_neg().ok_or(IntegerCastOverflow)?)),
-            Bit(x) => Ok(Bit(x.checked_neg().ok_or(IntegerCastOverflow)?))
+            Bit(x) => Ok(Bit(x.checked_neg().ok_or(IntegerCastOverflow)?)),
+            DigitTypeInUse(_) => Err(UsedDigitTypeAsIndex)
         }
     }
 }
@@ -145,7 +157,7 @@ impl Index {
 
 macro_rules! formatter {
     ($fmt_type: ident, $key: expr) => {
-        impl fmt::$fmt_type for Index {
+        impl<D: Digit> fmt::$fmt_type for Index<D> {
             fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
                 match self {
                     Position(x) => {
@@ -156,6 +168,8 @@ macro_rules! formatter {
                         write!(f, "[").ok();
                         write!(f, $key, x).ok();
                         write!(f, "]")
+                    }, DigitTypeInUse(d) => {
+                        write!(f, "{:?}", d)
                     }
                 }
             }
@@ -170,41 +184,43 @@ formatter!(LowerHex, "{:x}");
 formatter!(UpperHex, "{:X}");
 formatter!(Binary, "{:b}");
 
-impl From<&Index> for isize {
-    fn from(a: &Index) -> isize {
+impl<D: Digit> From<&Index<D>> for isize {
+    fn from(a: &Index<D>) -> isize {
         match a {
             Position(x) => *x,
-            Bit(x) => *x
+            Bit(x) => *x,
+            DigitTypeInUse(_) => panic!("invalid index")
         }
     }
 }
 
-impl From<Index> for isize {
-    fn from(a: Index) -> isize {
+impl<D: Digit> From<Index<D>> for isize {
+    fn from(a: Index<D>) -> isize {
         isize::from(&a)
     }
 }
 
-impl From<&Index> for usize {
-    fn from(a: &Index) -> usize {
-        match a.saturating_nonnegative() {
+impl<D: Digit> From<&Index<D>> for usize {
+    fn from(a: &Index<D>) -> usize {
+        match a.saturating_nonnegative().unwrap() {
             Position(x) => x as usize,
-            Bit(x) => x as usize
+            Bit(x) => x as usize,
+            DigitTypeInUse(_) => panic!("unreachable")
         }
     }
 }
 
-impl From<Index> for usize {
-    fn from(a: Index) -> usize {
+impl<D: Digit> From<Index<D>> for usize {
+    fn from(a: Index<D>) -> usize {
         usize::from(&a)
     }
 }
 
-unary_copy!(Neg, neg, Index, neg, Index, IndexError);
+unary_copy_parametrized!(Neg, neg, D, Digit, Index<D>, neg, Index<D>, IndexError);
 
-impl Add for &Index {
-    type Output = Result<Index, IndexError>;
-    fn add(self, other: &Index) -> Result<Index, IndexError> {
+impl<D: Digit> Add for &Index<D> {
+    type Output = Result<Index<D>, IndexError>;
+    fn add(self, other: &Index<D>) -> Result<Index<D>, IndexError> {
         let a;
         let b;
         let position;
@@ -220,15 +236,16 @@ impl Add for &Index {
                 position = false;
             },
             (Position(x), Bit(y)) => {
-                a = Index::position_to_bit(*x)?;
+                a = Index::<D>::position_to_bit(*x)?;
                 b = *y;
                 position = false;
             },
             (Bit(x), Position(y)) => {
                 a = *x;
-                b = Index::position_to_bit(*y)?;
+                b = Index::<D>::position_to_bit(*y)?;
                 position = false;
-            }
+            },
+            _ => return Err(UsedDigitTypeAsIndex)
         };
         let sum = a.checked_add(b).ok_or(AdditionOverflow)?;
         if position {
@@ -239,92 +256,96 @@ impl Add for &Index {
     }
 }
 
-op_to_op_assign!(
+/*op_to_op_assign!(
     Add, add,
     AddAssign, add_assign,
-    Index, Index,
-    Index, IndexError
-);
+    Index<D>, Index<D>,
+    Index<D>, IndexError
+);*/
 
-impl Add<&usize> for &Index {
-    type Output = Result<Index, IndexError>;
-    fn add(self, other: &usize) -> Result<Index, IndexError> {
+impl<D: Digit> Add<&usize> for &Index<D> {
+    type Output = Result<Index<D>, IndexError>;
+    fn add(self, other: &usize) -> Result<Index<D>, IndexError> {
         match self {
             Position(x) => {
-                Ok(Position(x.checked_add(Index::castsize(*other)?).ok_or(AdditionOverflow)?))
+                Ok(Position(x.checked_add(Index::<D>::castsize(*other)?).ok_or(AdditionOverflow)?))
             },
             Bit(x) => {
-                Ok(Bit(x.checked_add(Index::castsize(*other)?).ok_or(AdditionOverflow)?))
-            }
+                Ok(Bit(x.checked_add(Index::<D>::castsize(*other)?).ok_or(AdditionOverflow)?))
+            },
+            DigitTypeInUse(_) => Err(UsedDigitTypeAsIndex)
         }
     }
 }
 
-op_to_op_assign!(
+/*op_to_op_assign!(
     Add, add,
     AddAssign, add_assign,
-    Index, usize,
-    Index, IndexError
-);
+    Index<D>, usize,
+    Index<D>, IndexError
+);*/
 
-impl Add<&Index> for usize {
-    type Output = Result<Index, IndexError>;
-    fn add(self, other: &Index) -> Result<Index, IndexError> {
+impl<D: Digit> Add<&Index<D>> for usize {
+    type Output = Result<Index<D>, IndexError>;
+    fn add(self, other: &Index<D>) -> Result<Index<D>, IndexError> {
         match other {
-            Position(x) => Ok(Position(x.checked_add(Index::castsize(self)?).ok_or(AdditionOverflow)?)),
-            Bit(x) => Ok(Bit(x.checked_add(Index::castsize(self)?).ok_or(AdditionOverflow)?)),
+            Position(x) => Ok(Position(x.checked_add(Index::<D>::castsize(self)?).ok_or(AdditionOverflow)?)),
+            Bit(x) => Ok(Bit(x.checked_add(Index::<D>::castsize(self)?).ok_or(AdditionOverflow)?)),
+            DigitTypeInUse(_) => Err(UsedDigitTypeAsIndex)
         }
     }
 }
 
-impl Add<Index> for usize {
-    type Output = Result<Index, IndexError>;
-    fn add(self, other: Index) -> Result<Index, IndexError> {
+impl<D: Digit> Add<Index<D>> for usize {
+    type Output = Result<Index<D>, IndexError>;
+    fn add(self, other: Index<D>) -> Result<Index<D>, IndexError> {
         self + &other
     }
 }
 
-impl Add<&isize> for &Index {
-    type Output = Result<Index, IndexError>;
-    fn add(self, other: &isize) -> Result<Index, IndexError> {
+impl<D: Digit> Add<&isize> for &Index<D> {
+    type Output = Result<Index<D>, IndexError>;
+    fn add(self, other: &isize) -> Result<Index<D>, IndexError> {
         match self {
             Position(x) => {
                 Ok(Position(x.checked_add(*other).ok_or(AdditionOverflow)?))
             },
             Bit(x) => {
                 Ok(Bit(x.checked_add(*other).ok_or(AdditionOverflow)?))
-            }
+            },
+            DigitTypeInUse(_) => Err(UsedDigitTypeAsIndex)
         }
     }
 }
 
-op_to_op_assign!(
+/*op_to_op_assign!(
     Add, add,
     AddAssign, add_assign,
-    Index, isize,
-    Index, IndexError
-);
+    Index<D>, isize,
+    Index<D>, IndexError
+);*/
 
-impl Add<&Index> for isize {
-    type Output = Result<Index, IndexError>;
-    fn add(self, other: &Index) -> Result<Index, IndexError> {
+impl<D: Digit> Add<&Index<D>> for isize {
+    type Output = Result<Index<D>, IndexError>;
+    fn add(self, other: &Index<D>) -> Result<Index<D>, IndexError> {
         match other {
             Position(x) => Ok(Position(self.checked_add(*x).ok_or(AdditionOverflow)?)),
-            Bit(x) => Ok(Bit(self.checked_add(*x).ok_or(AdditionOverflow)?))
+            Bit(x) => Ok(Bit(self.checked_add(*x).ok_or(AdditionOverflow)?)),
+            DigitTypeInUse(_) => Err(UsedDigitTypeAsIndex)
         }
     }
 }
 
-impl Add<Index> for isize {
-    type Output = Result<Index, IndexError>;
-    fn add(self, other: Index) -> Result<Index, IndexError> {
+impl<D: Digit> Add<Index<D>> for isize {
+    type Output = Result<Index<D>, IndexError>;
+    fn add(self, other: Index<D>) -> Result<Index<D>, IndexError> {
         self + &other
     }
 }
 
-impl Sub for &Index {
-    type Output = Result<Index, IndexError>;
-    fn sub(self, other: &Index) -> Result<Index, IndexError> {
+impl<D: Digit> Sub for &Index<D> {
+    type Output = Result<Index<D>, IndexError>;
+    fn sub(self, other: &Index<D>) -> Result<Index<D>, IndexError> {
         let a;
         let b;
         let position;
@@ -340,15 +361,16 @@ impl Sub for &Index {
                 position = false;
             },
             (Position(x), Bit(y)) => {
-                a = Index::position_to_bit(*x)?;
+                a = Index::<D>::position_to_bit(*x)?;
                 b = *y;
                 position = false;
             },
             (Bit(x), Position(y)) => {
                 a = *x;
-                b = Index::position_to_bit(*y)?;
+                b = Index::<D>::position_to_bit(*y)?;
                 position = false;
-            }
+            },
+            _ => return Err(UsedDigitTypeAsIndex)
         };
         let diff = a.checked_sub(b).ok_or(AdditionOverflow)?;
         if position {
@@ -359,92 +381,88 @@ impl Sub for &Index {
     }
 }
 
-op_to_op_assign!(
+/*op_to_op_assign!(
     Sub, sub,
     SubAssign, sub_assign,
-    Index, Index,
-    Index, IndexError
-);
+    Index<D>, Index<D>,
+    Index<D>, IndexError
+);*/
 
-impl Sub<&usize> for &Index {
-    type Output = Result<Index, IndexError>;
-    fn sub(self, other: &usize) -> Result<Index, IndexError> {
+impl<D: Digit> Sub<&usize> for &Index<D> {
+    type Output = Result<Index<D>, IndexError>;
+    fn sub(self, other: &usize) -> Result<Index<D>, IndexError> {
         match self {
-            Position(x) => {
-                Ok(Position(x.checked_sub(Index::castsize(*other)?).ok_or(AdditionOverflow)?))
-            },
-            Bit(x) => {
-                Ok(Bit(x.checked_sub(Index::castsize(*other)?).ok_or(AdditionOverflow)?))
-            }
+            Position(x) => Ok(Position(x.checked_sub(Index::<D>::castsize(*other)?).ok_or(AdditionOverflow)?)),
+            Bit(x) => Ok(Bit(x.checked_sub(Index::<D>::castsize(*other)?).ok_or(AdditionOverflow)?)),
+            DigitTypeInUse(_) => Err(UsedDigitTypeAsIndex)
         }
     }
 }
 
-op_to_op_assign!(
+/*op_to_op_assign!(
     Sub, sub,
     SubAssign, sub_assign,
-    Index, usize,
-    Index, IndexError
-);
+    Index<D>, usize,
+    Index<D>, IndexError
+);*/
 
-impl Sub<&Index> for usize {
-    type Output = Result<Index, IndexError>;
-    fn sub(self, other: &Index) -> Result<Index, IndexError> {
+impl<D: Digit> Sub<&Index<D>> for usize {
+    type Output = Result<Index<D>, IndexError>;
+    fn sub(self, other: &Index<D>) -> Result<Index<D>, IndexError> {
         match other {
-            Position(x) => Ok(Position(Index::castsize(self)?.checked_sub(*x).ok_or(AdditionOverflow)?)),
-            Bit(x) => Ok(Bit(Index::castsize(self)?.checked_sub(*x).ok_or(AdditionOverflow)?)),
+            Position(x) => Ok(Position(Index::<D>::castsize(self)?.checked_sub(*x).ok_or(AdditionOverflow)?)),
+            Bit(x) => Ok(Bit(Index::<D>::castsize(self)?.checked_sub(*x).ok_or(AdditionOverflow)?)),
+            DigitTypeInUse(_) => Err(UsedDigitTypeAsIndex)
         }
     }
 }
 
-impl Sub<Index> for usize {
-    type Output = Result<Index, IndexError>;
-    fn sub(self, other: Index) -> Result<Index, IndexError> {
+impl<D: Digit> Sub<Index<D>> for usize {
+    type Output = Result<Index<D>, IndexError>;
+    fn sub(self, other: Index<D>) -> Result<Index<D>, IndexError> {
         self - &other
     }
 }
 
-impl Sub<&isize> for &Index {
-    type Output = Result<Index, IndexError>;
-    fn sub(self, other: &isize) -> Result<Index, IndexError> {
+impl<D: Digit> Sub<&isize> for &Index<D> {
+    type Output = Result<Index<D>, IndexError>;
+    fn sub(self, other: &isize) -> Result<Index<D>, IndexError> {
         match self {
-            Position(x) => {
-                Ok(Position(x.checked_sub(*other).ok_or(AdditionOverflow)?))
-            },
-            Bit(x) => {
-                Ok(Bit(x.checked_sub(*other).ok_or(AdditionOverflow)?))
-            }
+            Position(x) => Ok(Position(x.checked_sub(*other).ok_or(AdditionOverflow)?)),
+            Bit(x) => Ok(Bit(x.checked_sub(*other).ok_or(AdditionOverflow)?)),
+            DigitTypeInUse(_) => Err(UsedDigitTypeAsIndex)
         }
     }
 }
 
-op_to_op_assign!(
+/*op_to_op_assign!(
     Sub, sub,
     SubAssign, sub_assign,
-    Index, isize,
-    Index, IndexError
-);
+    Index<D>, isize,
+    Index<D>, IndexError
+);*/
 
-impl Sub<&Index> for isize {
-    type Output = Result<Index, IndexError>;
-    fn sub(self, other: &Index) -> Result<Index, IndexError> {
+impl<D: Digit> Sub<&Index<D>> for isize {
+    type Output = Result<Index<D>, IndexError>;
+    fn sub(self, other: &Index<D>) -> Result<Index<D>, IndexError> {
         match other {
             Position(x) => Ok(Position(self.checked_sub(*x).ok_or(AdditionOverflow)?)),
-            Bit(x) => Ok(Bit(self.checked_sub(*x).ok_or(AdditionOverflow)?))
+            Bit(x) => Ok(Bit(self.checked_sub(*x).ok_or(AdditionOverflow)?)),
+            DigitTypeInUse(_) => Err(UsedDigitTypeAsIndex)
         }
     }
 }
 
-impl Sub<Index> for isize {
-    type Output = Result<Index, IndexError>;
-    fn sub(self, other: Index) -> Result<Index, IndexError> {
+impl<D: Digit> Sub<Index<D>> for isize {
+    type Output = Result<Index<D>, IndexError>;
+    fn sub(self, other: Index<D>) -> Result<Index<D>, IndexError> {
         self - &other
     }
 }
 
-impl Mul for &Index {
-    type Output = Result<Index, IndexError>;
-    fn mul(self, other: &Index) -> Result<Index, IndexError> {
+impl<D: Digit> Mul for &Index<D> {
+    type Output = Result<Index<D>, IndexError>;
+    fn mul(self, other: &Index<D>) -> Result<Index<D>, IndexError> {
         let a;
         let b;
         let position;
@@ -460,15 +478,16 @@ impl Mul for &Index {
                 position = false;
             },
             (Position(x), Bit(y)) => {
-                a = Index::position_to_bit(*x)?;
+                a = Index::<D>::position_to_bit(*x)?;
                 b = *y;
                 position = false;
             },
             (Bit(x), Position(y)) => {
                 a = *x;
-                b = Index::position_to_bit(*y)?;
+                b = Index::<D>::position_to_bit(*y)?;
                 position = false;
-            }
+            },
+            _ => return Err(UsedDigitTypeAsIndex)
         };
         let prod = a.checked_mul(b).ok_or(AdditionOverflow)?;
         if position {
@@ -479,165 +498,175 @@ impl Mul for &Index {
     }
 }
 
-op_to_op_assign!(
+/*op_to_op_assign!(
     Mul, mul,
     MulAssign, mul_assign,
-    Index, Index,
-    Index, IndexError
-);
+    Index<D>, Index<D>,
+    Index<D>, IndexError
+);*/
 
-impl Mul<&usize> for &Index {
-    type Output = Result<Index, IndexError>;
-    fn mul(self, other: &usize) -> Result<Index, IndexError> {
+impl<D: Digit> Mul<&usize> for &Index<D> {
+    type Output = Result<Index<D>, IndexError>;
+    fn mul(self, other: &usize) -> Result<Index<D>, IndexError> {
         match self {
-            Position(x) => {
-                Ok(Position(x.checked_mul(Index::castsize(*other)?).ok_or(AdditionOverflow)?))
-            },
-            Bit(x) => {
-                Ok(Bit(x.checked_mul(Index::castsize(*other)?).ok_or(AdditionOverflow)?))
-            }
+            Position(x) => Ok(Position(x.checked_mul(Index::<D>::castsize(*other)?).ok_or(AdditionOverflow)?)),
+            Bit(x) => Ok(Bit(x.checked_mul(Index::<D>::castsize(*other)?).ok_or(AdditionOverflow)?)),
+            DigitTypeInUse(_) => Err(UsedDigitTypeAsIndex)
         }
     }
 }
 
-op_to_op_assign!(
+/*op_to_op_assign!(
     Mul, mul,
     MulAssign, mul_assign,
-    Index, usize,
-    Index, IndexError
-);
+    Index<D>, usize,
+    Index<D>, IndexError
+);*/
 
-impl Mul<&Index> for usize {
-    type Output = Result<Index, IndexError>;
-    fn mul(self, other: &Index) -> Result<Index, IndexError> {
+impl<D: Digit> Mul<&Index<D>> for usize {
+    type Output = Result<Index<D>, IndexError>;
+    fn mul(self, other: &Index<D>) -> Result<Index<D>, IndexError> {
         match other {
-            Position(x) => Ok(Position(x.checked_mul(Index::castsize(self)?).ok_or(AdditionOverflow)?)),
-            Bit(x) => Ok(Bit(x.checked_mul(Index::castsize(self)?).ok_or(AdditionOverflow)?)),
+            Position(x) => Ok(Position(x.checked_mul(Index::<D>::castsize(self)?).ok_or(AdditionOverflow)?)),
+            Bit(x) => Ok(Bit(x.checked_mul(Index::<D>::castsize(self)?).ok_or(AdditionOverflow)?)),
+            DigitTypeInUse(_) => Err(UsedDigitTypeAsIndex)
         }
     }
 }
 
-impl Mul<Index> for usize {
-    type Output = Result<Index, IndexError>;
-    fn mul(self, other: Index) -> Result<Index, IndexError> {
+impl<D: Digit> Mul<Index<D>> for usize {
+    type Output = Result<Index<D>, IndexError>;
+    fn mul(self, other: Index<D>) -> Result<Index<D>, IndexError> {
         self * &other
     }
 }
 
-impl Mul<&isize> for &Index {
-    type Output = Result<Index, IndexError>;
-    fn mul(self, other: &isize) -> Result<Index, IndexError> {
+impl<D: Digit> Mul<&isize> for &Index<D> {
+    type Output = Result<Index<D>, IndexError>;
+    fn mul(self, other: &isize) -> Result<Index<D>, IndexError> {
         match self {
-            Position(x) => {
-                Ok(Position(x.checked_mul(*other).ok_or(AdditionOverflow)?))
-            },
-            Bit(x) => {
-                Ok(Bit(x.checked_mul(*other).ok_or(AdditionOverflow)?))
-            }
+            Position(x) => Ok(Position(x.checked_mul(*other).ok_or(AdditionOverflow)?)),
+            Bit(x) => Ok(Bit(x.checked_mul(*other).ok_or(AdditionOverflow)?)),
+            DigitTypeInUse(_) => Err(UsedDigitTypeAsIndex)
         }
     }
 }
 
-op_to_op_assign!(
+/*op_to_op_assign!(
     Mul, mul,
     MulAssign, mul_assign,
-    Index, isize,
-    Index, IndexError
-);
+    Index<D>, isize,
+    Index<D>, IndexError
+);*/
 
-impl Mul<&Index> for isize {
-    type Output = Result<Index, IndexError>;
-    fn mul(self, other: &Index) -> Result<Index, IndexError> {
+impl<D: Digit> Mul<&Index<D>> for isize {
+    type Output = Result<Index<D>, IndexError>;
+    fn mul(self, other: &Index<D>) -> Result<Index<D>, IndexError> {
         match other {
             Position(x) => Ok(Position(self.checked_mul(*x).ok_or(AdditionOverflow)?)),
-            Bit(x) => Ok(Bit(self.checked_mul(*x).ok_or(AdditionOverflow)?))
+            Bit(x) => Ok(Bit(self.checked_mul(*x).ok_or(AdditionOverflow)?)),
+            DigitTypeInUse(_) => Err(UsedDigitTypeAsIndex)
         }
     }
 }
 
-impl Mul<Index> for isize {
-    type Output = Result<Index, IndexError>;
-    fn mul(self, other: Index) -> Result<Index, IndexError> {
+impl<D: Digit> Mul<Index<D>> for isize {
+    type Output = Result<Index<D>, IndexError>;
+    fn mul(self, other: Index<D>) -> Result<Index<D>, IndexError> {
         self * &other
     }
 }
 
-impl PartialEq for Index {
-    fn eq(&self, other: &Index) -> bool {
+impl<D: Digit> PartialEq for Index<D> {
+    fn eq(&self, other: &Index<D>) -> bool {
         match (self, other) {
             (Position(x), Position(y)) => x == y,
             (Bit(x), Bit(y)) => x == y,
             (Position(x), Bit(y)) => {
-                *x == Index::bit_to_position(*y)
+                *x == Index::<D>::bit_to_position(*y)
             },
             (Bit(x), Position(y)) => {
-                *y == Index::bit_to_position(*x)
-            }
+                *y == Index::<D>::bit_to_position(*x)
+            },
+            (DigitTypeInUse(x), DigitTypeInUse(y)) => x == y,
+            _ => false // like NaN != NaN
         }
     }
 }
 
-impl PartialEq<isize> for Index {
+impl<D: Digit> PartialEq<isize> for Index<D> {
     fn eq(&self, other: &isize) -> bool {
         match self {
             Position(x) => *x == *other,
-            Bit(x) => *x == *other
+            Bit(x) => *x == *other,
+            DigitTypeInUse(_) => false // like NaN != NaN
         }
     }
 }
 
-impl PartialEq<usize> for Index {
+impl<D: Digit> PartialEq<usize> for Index<D> {
     fn eq(&self, other: &usize) -> bool {
-        let o = Index::castsize(*other).unwrap();
+        let o = Index::<D>::castsize(*other).unwrap();
         match self {
             Position(x) => *x == o,
-            Bit(x) => *x == o
+            Bit(x) => *x == o,
+            DigitTypeInUse(_) => false // like NaN != NaN
         }
     }
 }
 
-impl PartialOrd for Index {
-    fn partial_cmp(&self, other: &Index) -> Option<Ordering> {
+impl<D: Digit> PartialOrd for Index<D> {
+    fn partial_cmp(&self, other: &Index<D>) -> Option<Ordering> {
         match (self, other) {
             (Position(x), Position(y)) => x.partial_cmp(y),
             (Bit(x), Bit(y)) => x.partial_cmp(y),
             (Position(x), Bit(y)) => {
-                match Index::position_to_bit(*x) {
+                match Index::<D>::position_to_bit(*x) {
                     Ok(z) => z.partial_cmp(y),
                     Err(_) => None
                 }
             },
             (Bit(x), Position(y)) => {
-                match Index::position_to_bit(*y) {
+                match Index::<D>::position_to_bit(*y) {
                     Ok(z) => x.partial_cmp(&z),
                     Err(_) => None
                 }
             }
+            (DigitTypeInUse(x), DigitTypeInUse(y)) => {
+                if x == y {
+                    Some(Ordering::Equal)
+                } else {
+                    None
+                }
+            },
+            _ => None
         }
     }
 }
 
-impl Ord for Index {
-    fn cmp(&self, other: &Index) -> Ordering {
+impl<D: Digit> Ord for Index<D> {
+    fn cmp(&self, other: &Index<D>) -> Ordering {
         self.partial_cmp(other).unwrap()
     }
 }
 
-impl PartialOrd<isize> for Index {
+impl<D: Digit> PartialOrd<isize> for Index<D> {
     fn partial_cmp(&self, other: &isize) -> Option<Ordering> {
         match self {
             Position(x) => x.partial_cmp(other),
-            Bit(x) => x.partial_cmp(other)
+            Bit(x) => x.partial_cmp(other),
+            DigitTypeInUse(_) => None
         }
     }
 }
 
-impl PartialOrd<usize> for Index {
+impl<D: Digit> PartialOrd<usize> for Index<D> {
     fn partial_cmp(&self, other: &usize) -> Option<Ordering> {
-        let o = &Index::castsize(*other).unwrap();
+        let o = &Index::<D>::castsize(*other).unwrap();
         match self {
             Position(x) => x.partial_cmp(o),
-            Bit(x) => x.partial_cmp(o)
+            Bit(x) => x.partial_cmp(o),
+            DigitTypeInUse(_) => None
         }
     }
 }
