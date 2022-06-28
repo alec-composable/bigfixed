@@ -3,67 +3,85 @@
 
 use paste::paste;
 
+pub trait Digit {
+    const DIGITBITS: usize;
+    const DIGITBYTES: usize;
+    type Digit;
+    type SignedDigit;
+
+    const DOUBLEBITS: usize;
+    const DOUBLEBYTES: usize;
+    type DoubleDigit;
+    type SignedDoubleDigit;
+
+    const ALLONES: Self::Digit;
+    const GREATESTBIT: Self::Digit;
+
+    fn digit_from_bytes(bytes: &[u8]) -> Self::Digit;
+
+    fn add(a: &Self::Digit, b: &Self::Digit, result: &mut Self::Digit);
+    fn add_full(a: &Self::Digit, b: &Self::Digit, result: &mut Self::Digit, carry: &mut Self::Digit);
+
+    fn mul(a: &Self::Digit, b: &Self::Digit, result: &mut Self::Digit);
+    fn mul_full(a: &Self::Digit, b: &Self::Digit, result: &mut Self::Digit, carry: &mut Self::Digit);
+
+    fn div(dividend_high: &Self::Digit, dividend_low: &Self::Digit, denominator: &Self::Digit, quotient: &mut Self::Digit);
+}
+
 macro_rules! build_digit {
     ($bits: expr, $double_bits: expr) => {
         paste!{
-            pub const DIGITBITS: usize = $bits;
-            pub const DIGITBYTES: usize = DIGITBITS / 8;
-            pub type Digit = [<u $bits>];
-            pub type SignedDigit = [<i $bits>];
-            
-            pub const DOUBLEBITS: usize = $double_bits;
-            pub const DOUBLEBYTES: usize = 2*DIGITBYTES;
-            pub type DoubleDigit = [<u $double_bits>];
-            pub type SignedDoubleDigit = [<i $double_bits>];
+            pub struct [<Digit $bits>] {}
 
-            pub const ALLONES: Digit = (-1 as SignedDigit) as Digit;
-            pub const GREATESTBIT: Digit = 1 << (DIGITBITS - 1);
+            impl Digit for [<Digit $bits>] {
+                const DIGITBITS: usize = $bits;
+                const DIGITBYTES: usize = Self::DIGITBITS / 8;
+                type Digit = [<u $bits>];
+                type SignedDigit = [<i $bits>];
+                
+                const DOUBLEBITS: usize = $double_bits;
+                const DOUBLEBYTES: usize = 2 * Self::DIGITBYTES;
+                type DoubleDigit = [<u $double_bits>];
+                type SignedDoubleDigit = [<i $double_bits>];
 
-            pub fn digit_from_bytes(bytes: &[u8]) -> Digit {
-                Digit::from_le_bytes(bytes.try_into().unwrap())
-            }
-            
-            #[macro_export]
-            macro_rules! add {
-                ($a: expr, $b: expr, $result: expr, $carry: expr) => {
-                    let res = ($a as DoubleDigit) + ($b as DoubleDigit);
-                    $result = res as Digit;
-                    $carry = (res >> DIGITBITS) as Digit;
-                };
-                ($a: expr, $b: expr, $result: expr) => {
-                    let res = ($a as Double) + ($b as Double);
-                    $result = res as Digit;
-                };
-            }
-            
-            pub(crate) use add;
-            
-            #[macro_export]
-            macro_rules! mul {
-                ($a: expr, $b: expr, $result: expr, $carry: expr) => {
-                    let res = ($a as DoubleDigit) * ($b as DoubleDigit);
-                    $result = res as Digit;
-                    $carry = (res >> DIGITBITS) as Digit;
-                };
-                ($a: expr, $b: expr, $result: expr) => {
-                    let res = ($a as Double) * ($b as Double);
-                    $result = res as Digit;
-                };
-            }
-            
-            pub(crate) use mul;
+                const ALLONES: Self::Digit = (-1 as Self::SignedDigit) as Self::Digit;
+                const GREATESTBIT: Self::Digit = 1 << (Self::DIGITBITS - 1);
 
-            #[macro_export]
-            macro_rules! div {
-                ($dividend_high: expr, $dividend_low: expr, $divisor: expr, $quot: expr) => {
-                    let dividend = (($dividend_high as DoubleDigit) << DIGITBITS) | ($dividend_low as DoubleDigit);
-                    let divisor = $divisor as DoubleDigit;
-                    $quot = (dividend / divisor) as Digit;
-                };
+                fn digit_from_bytes(bytes: &[u8]) -> Self::Digit {
+                    Self::Digit::from_le_bytes(bytes.try_into().unwrap())
+                }
+                
+                fn add(a: &Self::Digit, b: &Self::Digit, result: &mut Self::Digit) {
+                    let res = (*a as Self::DoubleDigit) + (*b as Self::DoubleDigit);
+                    *result = res as Self::Digit;
+                }
+                fn add_full(a: &Self::Digit, b: &Self::Digit, result: &mut Self::Digit, carry: &mut Self::Digit) {
+                    let res = (*a as Self::DoubleDigit) + (*b as Self::DoubleDigit);
+                    *result = res as Self::Digit;
+                    *carry = (res >> Self::DIGITBITS) as Self::Digit;
+                }
+                
+                fn mul(a: &Self::Digit, b: &Self::Digit, result: &mut Self::Digit) {
+                    let res = (*a as Self::DoubleDigit) * (*b as Self::DoubleDigit);
+                    *result = res as Self::Digit;
+                }
+                fn mul_full(a: &Self::Digit, b: &Self::Digit, result: &mut Self::Digit, carry: &mut Self::Digit) {
+                    let res = (*a as Self::DoubleDigit) * (*b as Self::DoubleDigit);
+                    *result = res as Self::Digit;
+                    *carry = (res >> Self::DIGITBITS) as Self::Digit;
+                }
+                
+                fn div(dividend_high: &Self::Digit, dividend_low: &Self::Digit, divisor: &Self::Digit, quotient: &mut Self::Digit) {
+                    let dividend = ((*dividend_high as Self::DoubleDigit) << Self::DIGITBITS) | (*dividend_low as Self::DoubleDigit);
+                    let divisor = *divisor as Self::DoubleDigit;
+                    *quotient = (dividend / divisor) as Self::Digit;
+                }
             }
-            pub(crate) use div;
         }
     };
 }
 
+build_digit!(8, 16);
 build_digit!(16, 32);
+build_digit!(32, 64);
+build_digit!(64, 128);

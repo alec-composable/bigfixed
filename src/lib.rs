@@ -1,7 +1,7 @@
 pub mod macros;
 
 pub mod digit;
-pub use crate::digit::Digit;
+pub use crate::digit::{Digit, Digit8, Digit16, Digit32, Digit64};
 
 pub mod index;
 pub use crate::index::*;

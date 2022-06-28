@@ -1,6 +1,6 @@
 use crate::{digit::*, Index, IndexError, Cutoff, cutoff::*};
 
-use std::{fmt, ops as stdops, iter::{repeat}, cmp::{max, min}, convert::From, slice::{IterMut}};
+use core::{fmt, ops as coreops, iter::{repeat}, cmp::{max, min}, convert::From, slice::{IterMut}};
 
 pub mod index_ops;
 pub mod convert;
@@ -8,18 +8,14 @@ pub mod ops;
 pub mod ops_c;
 pub mod exp;
 
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[derive(Clone, Copy, Debug)]
 pub enum BigFixedError {
     IndexError(IndexError)
 }
 
-pub use BigFixedError::{
-    IndexError as BigFixedIndexError
-};
-
 impl From<IndexError> for BigFixedError {
     fn from(x: IndexError) -> BigFixedError {
-        BigFixedIndexError(x)
+        BigFixedError::IndexError(x)
     }
 }
 
@@ -147,7 +143,7 @@ impl BigFixed {
     // same as ensure_valid_range where range is position..=position
     pub fn ensure_valid_position(&mut self, position: Index) -> Result<bool, BigFixedError> {
         let p = position.cast_to_position();
-        self.ensure_valid_range(p, (p + 1isize)?)
+        self.ensure_valid_range(p, (p + Index::Position(1))?)
     }
 
     pub fn range_mut_iter(&mut self, low: Index, high: Index) -> Result<IterMut<Digit>, BigFixedError> {
@@ -183,11 +179,11 @@ impl BigFixed {
     pub fn body_high(&self) -> Result<Index, BigFixedError> {
         match self.position + self.body.len() {
             Ok(res) => Ok(res),
-            Err(e) => Err(BigFixedIndexError(e))
+            Err(e) => Err(e.into())
         }
     }
 
-    pub fn valid_range(&self) -> Result<stdops::Range<Index>, BigFixedError> {
+    pub fn valid_range(&self) -> Result<coreops::Range<Index>, BigFixedError> {
         Ok(self.position..self.body_high()?)
     }
 
