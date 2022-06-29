@@ -680,3 +680,7 @@ impl<D: Digit> PartialOrd<usize> for Index<D> {
     }
 }
 
+pub type Index8 = Index<Digit8>;
+pub type Index16 = Index<Digit16>;
+pub type Index32 = Index<Digit32>;
+pub type Index64 = Index<Digit64>;

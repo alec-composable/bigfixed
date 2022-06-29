@@ -17,7 +17,7 @@
     they truncate quickly enough lest they devour available resources.
 */
 
-use crate::{Index, BigFixedError};
+use crate::{Digit, Index, IndexError};
 
 use std::{cmp::{PartialEq}, fmt};
 
@@ -31,24 +31,24 @@ pub enum Rounding {
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
-pub struct Cutoff {
-    pub fixed: Option<Index>,
-    pub floating: Option<Index>,
+pub struct Cutoff<D: Digit> {
+    pub fixed: Option<Index<D>>,
+    pub floating: Option<Index<D>>,
     pub round: Rounding
 }
 
-pub trait CutsOff {
-    fn cutoff(&mut self, cutoff: Cutoff) -> Result<(), BigFixedError>;
+pub trait CutsOff<D: Digit> {
+    fn cutoff(&mut self, cutoff: Cutoff<D>) -> Result<(), IndexError>;
 }
 
-impl fmt::Display for Cutoff {
+impl<D: Digit> fmt::Display for Cutoff<D> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "({:?}, {:?})", self.fixed, self.floating)
     }
 }
 
-impl Cutoff {
-    pub const INTEGER: Cutoff = Cutoff {
+impl<D: Digit> Cutoff<D> {
+    pub const INTEGER: Cutoff<D> = Cutoff {
         fixed: Some(Index::Position(0)),
         floating: None,
         round: Rounding::Floor
