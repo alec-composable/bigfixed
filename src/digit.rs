@@ -34,7 +34,7 @@ pub trait Arithmetic<Other, Out>:
 pub trait Digit: 
     Eq + Debug + Clone + Copy
     + Arithmetic<u8, Self> + Arithmetic<u16, Self> + Arithmetic<u32, Self> + Arithmetic<u64, Self> + Arithmetic<u128, Self> + Arithmetic<usize, Self>
-    + Arithmetic<Self, Self>
+    + Arithmetic<Self, Self> + Arithmetic<<Self as Digit>::Digit, Self>
 {
     const DIGITBITS: usize;
     const DIGITBYTES: usize;
@@ -46,8 +46,15 @@ pub trait Digit:
     type DoubleDigit: PrimInt;
     type SignedDoubleDigit: PrimInt;
 
+    const ZERO: Self::Digit;
+    const ONE: Self::Digit;
     const ALLONES: Self::Digit;
     const GREATESTBIT: Self::Digit;
+
+    const ZEROD: Self;
+    const ONED: Self;
+    const ALLONESD: Self;
+    const GREATESTBITD: Self;
 
     fn digit_from_bytes(bytes: &[u8]) -> Self::Digit;
 
@@ -58,6 +65,10 @@ pub trait Digit:
     fn mul_full(a: &Self::Digit, b: &Self::Digit, result: &mut Self::Digit, carry: &mut Self::Digit);
 
     fn div(dividend_high: &Self::Digit, dividend_low: &Self::Digit, denominator: &Self::Digit, quotient: &mut Self::Digit);
+
+    fn deref(&self) -> Self {
+        *self
+    }
 }
 
 macro_rules! build_digit {
@@ -79,8 +90,15 @@ macro_rules! build_digit {
                 type DoubleDigit = [<u $double_bits>];
                 type SignedDoubleDigit = [<i $double_bits>];
 
+                const ZERO: Self::Digit = 0 as Self::Digit;
+                const ONE: Self::Digit = 1 as Self::Digit;
                 const ALLONES: Self::Digit = (-1 as Self::SignedDigit) as Self::Digit;
                 const GREATESTBIT: Self::Digit = 1 << (Self::DIGITBITS - 1);
+
+                const ZEROD: Self = Self::ZERO.into();
+                const ONED: Self = Self::ONE.into();
+                const ALLONESD: Self = Self::ALLONES.into();
+                const GREATESTBITD: Self = Self::GREATESTBIT.into();
 
                 fn digit_from_bytes(bytes: &[u8]) -> Self::Digit {
                     Self::Digit::from_le_bytes(bytes.try_into().unwrap())
@@ -147,12 +165,14 @@ macro_rules! converters {
         }
     };
     ($digit_bits: expr) => {
-        converters!($digit_bits, u8);
-        converters!($digit_bits, u16);
-        converters!($digit_bits, u32);
-        converters!($digit_bits, u64);
-        converters!($digit_bits, u128);
-        converters!($digit_bits, usize);
+        paste! {
+            converters!($digit_bits, u8);
+            converters!($digit_bits, u16);
+            converters!($digit_bits, u32);
+            converters!($digit_bits, u64);
+            converters!($digit_bits, u128);
+            converters!($digit_bits, usize);
+        }
     }
 }
 

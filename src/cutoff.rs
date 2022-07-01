@@ -17,9 +17,9 @@
     they truncate quickly enough lest they devour available resources.
 */
 
-use crate::{Digit, Index, IndexError};
+use crate::{Digit, Index};
 
-use std::{cmp::{PartialEq}, fmt};
+use std::{cmp::{PartialEq}, fmt, error::{Error}};
 
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
 pub enum Rounding {
@@ -37,8 +37,8 @@ pub struct Cutoff<D: Digit> {
     pub round: Rounding
 }
 
-pub trait CutsOff<D: Digit> {
-    fn cutoff(&mut self, cutoff: Cutoff<D>) -> Result<(), IndexError>;
+pub trait CutsOff<D: Digit, E: Error> {
+    fn cutoff(&mut self, cutoff: Cutoff<D>) -> Result<(), E>;
 }
 
 impl<D: Digit> fmt::Display for Cutoff<D> {
