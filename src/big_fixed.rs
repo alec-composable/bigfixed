@@ -2,15 +2,18 @@ use crate::{digit::*, Index, IndexError, Cutoff, cutoff::*};
 
 use core::{fmt, ops as coreops, iter::{repeat}, cmp::{max, min}, convert::From, slice::{IterMut}};
 
-pub mod index_ops;
-pub mod convert;
-pub mod ops;
-pub mod ops_c;
-pub mod exp;
+//pub mod index_ops;
+//pub mod convert;
+//pub mod ops;
+//pub mod ops_c;
+//pub mod exp;
 
 #[derive(Clone, Copy, Debug)]
 pub enum BigFixedError {
-    IndexError(IndexError)
+    // absorb IndexErrors
+    IndexError(IndexError),
+    // not applicable to Vec-based BigFixed but applicable to hard coded versions
+    OutOfBoundsError
 }
 
 impl From<IndexError> for BigFixedError {
@@ -20,13 +23,231 @@ impl From<IndexError> for BigFixedError {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct BigFixed {
-    pub head: Digit,
-    pub body: Vec<Digit>,
-    pub position: Index
+pub struct BigFixedVec<D: Digit> {
+    pub head: D,
+    pub body: Vec<D>,
+    pub position: Index<D>
 }
 
-impl BigFixed {
+pub trait BigFixed<D: Digit>:
+    Clone + PartialEq + Eq
+{
+    // fix position then remove redundant body data
+    fn format(&mut self) -> Result<(), BigFixedError>;
+
+    // If self.position is Index::Bit this will bit shift as necessary and turn it into Index::Position. Returns whether casting was necessary.
+    fn fix_position(&mut self) -> Result<bool, BigFixedError>;
+
+    // Check if self.position is of type Index::Position
+    fn properly_positioned(&self) -> bool;
+
+    // Restructure if necessary so that all positions in low..high are valid. Breaks format so reformat afterwards. Returns whether restructuring was necessary.
+    fn ensure_valid_range(&mut self, low: Index<D>, high: Index<D>) -> Result<bool, BigFixedError>;
+
+    // same as ensure_valid_range where range is position..=position
+    fn ensure_valid_position(&mut self, position: Index<D>) -> Result<bool, BigFixedError> {
+        let p = position.cast_to_position()?;
+        self.ensure_valid_range(p, (p + Index::Position(1))?)
+    }
+
+    // ensure valid range then return a mutable iterator over the body
+    fn range_mut_iter(&mut self, low: Index<D>, high: Index<D>) -> Result<IterMut<D>, BigFixedError>;
+
+    // iterate over the body
+    fn range_iter(&self, low: Index<D>, high: Index<D>) -> Result<IntoIterator<D>, BigFixedError> {
+        assert!(self.properly_positioned());
+        let body_high = self.body_high()?;
+        let low = low.cast_to_position();
+        let keep_low = min(body_high, max(self.position, low));
+        let keep_high = min(high, body_high);
+        let high = high.cast_to_position();
+        Ok(
+            repeat(0).take((self.position - low)?.unsigned_value())
+            .chain(
+                self.body.iter().map(|x| *x)
+                .skip((keep_low - self.position)?.unsigned_value())
+                .take((keep_high - keep_low)?.unsigned_value())
+            )
+            .chain(
+                repeat(self.head).take((high - body_high)?.unsigned_value())
+            )
+        )
+    }
+
+    pub fn is_neg(&self) -> bool {
+        self.head != 0
+    }
+
+    // the least position which is outside of the range contained in body
+    pub fn body_high(&self) -> Result<Index, BigFixedError> {
+        match self.position + self.body.len() {
+            Ok(res) => Ok(res),
+            Err(e) => Err(e.into())
+        }
+    }
+
+    pub fn valid_range(&self) -> Result<coreops::Range<Index>, BigFixedError> {
+        Ok(self.position..self.body_high()?)
+    }
+
+    pub fn int(&self) -> Result<BigFixed, BigFixedError> {
+        BigFixed::construct(
+            self.head,
+            self.body[(-self.position)?.unsigned_value()..self.body.len()].to_vec(),
+            self.position.saturating_nonnegative()
+        )
+    }
+
+    pub fn frac(&self) -> Result<BigFixed, BigFixedError> {
+        BigFixed::construct(
+            0,
+            self.body[0..(-self.position)?.unsigned_value()].to_vec(),
+            self.position // if position is positive then body must be empty and format() resets position to 0
+        )
+    }
+
+    pub fn overwrite(&mut self, src: &BigFixed) {
+        self.head = src.head;
+        self.body.splice(0..self.body.len(), src.body.iter().map(|x| *x));
+        self.position = src.position;
+    }
+
+    pub fn clear(&mut self) {
+        self.overwrite(&BigFixed::ZERO);
+    }
+
+    pub fn shift(mut self, shift: Index) -> Result<BigFixed, BigFixedError> {
+        self.position += shift;
+        self.format()?;
+        Ok(self)
+    }
+
+    // does not require proper formatting -- fully checks if self is zero
+    pub fn is_zero(&self) -> bool {
+        self.head == 0 && self.body.iter().all(|&x| x == 0)
+    }
+
+    pub fn full_eq(&self, other: &BigFixed) -> Result<bool, BigFixedError> {
+        for i in min(
+            self.position.cast_to_position(),
+            other.position.cast_to_position()
+        ).value()..(
+            max(
+                self.body_high()?,
+                other.body_high()?
+            ) + 1isize
+        )?.value() {
+            if self[Index::Position(i)] != other[Index::Position(i)] {
+                return Ok(false);
+            }
+        };
+        Ok(true)
+    }
+
+    pub fn cutoff_index(&self, cutoff: Cutoff) -> Result<Index, BigFixedError> {
+        match (cutoff.fixed, cutoff.floating) {
+            (None, None) => Ok(self.position), // no cutoff
+            (Some(fixed), None) => Ok(max(self.position, fixed)),
+            (None, Some(floating)) => Ok(max(self.position, (self.greatest_bit_position()? - max(floating, Index::Bit(0)))?)),
+            (Some(fixed), Some(floating)) => Ok(min(
+                max(self.position, fixed),
+                max(self.position, (self.greatest_bit_position()? - max(floating, Index::Bit(0)))?))
+            )
+        }
+    }
+
+    pub fn greatest_bit_position(&self) -> Result<Index, BigFixedError> {
+        // zero is special, just return 0
+        if self.is_zero() {
+            return Ok(Index::Position(0));
+        }
+        let position = self.body_high()?;
+        let coefficient: Digit = self[(position - 1isize)?] ^ self.head; // greatest bit which differs from head is greatest bit here
+        Ok(Index::Bit(position.bit_value()? - Index::castsize(coefficient.leading_zeros() as usize + 1)?))
+    }
+
+    pub fn cutoff(&mut self, cutoff: Cutoff) -> Result<(), BigFixedError> {
+        self.fix_position()?;
+        let cutoff_index = self.cutoff_index(cutoff)?;
+        let as_bit = cutoff_index.cast_to_bit()?;
+        let as_pos = cutoff_index.cast_to_position();
+        let increment = match cutoff.round {
+            Rounding::Floor => false,
+            Rounding::Round => self[(as_bit - Index::Bit(1))?] > 0,
+            Rounding::Ceiling => {
+                if self.position >= as_bit {
+                    false
+                } else {
+                    let mut has_value = false;
+                    for p in self.position.value()..as_pos.value() {
+                        if self[Index::Position(p)] != 0 {
+                            has_value = true;
+                            break;
+                        }
+                    }
+                    let diff = as_bit.bit_position_excess();
+                    if diff > 0 {
+                        has_value = has_value || (self[as_pos] & (ALLONES >> (DIGITBITS as isize - diff)) > 0);
+                    }
+                    has_value
+                }
+            },
+            Rounding::TowardsZero => {
+                if self.is_neg() {
+                    return self.cutoff(Cutoff {
+                        fixed: cutoff.fixed,
+                        floating: cutoff.floating,
+                        round: Rounding::Floor
+                    });
+                } else {
+                    return self.cutoff(Cutoff {
+                        fixed: cutoff.fixed,
+                        floating: cutoff.floating,
+                        round: Rounding::Ceiling
+                    })
+                }
+            },
+            Rounding::AwayFromZero => {
+                if self.is_neg() {
+                    return self.cutoff(Cutoff {
+                        fixed: cutoff.fixed,
+                        floating: cutoff.floating,
+                        round: Rounding::Ceiling
+                    });
+                } else {
+                    return self.cutoff(Cutoff {
+                        fixed: cutoff.fixed,
+                        floating: cutoff.floating,
+                        round: Rounding::Floor
+                    })
+                }
+            }
+        };
+        if as_pos > self.position {
+            self.body.drain(0..min(self.body.len(), (as_pos - self.position)?.into()));
+            self.position = as_pos;
+        }
+        let diff = (as_bit - as_pos)?.value();
+        if diff > 0 {
+            if self.body.len() == 0 {
+                self.body.push(self.head);
+            }
+            self[as_pos] &= ALLONES << diff;
+        }
+        if increment {
+            self.add_digit(1, as_bit)?;
+        }
+        self.format()?;
+        Ok(())
+    }
+
+    pub const ZERO: BigFixed = BigFixed {
+        head: 0,
+        body: vec![],
+        position: Index::Position(0)
+    };
+}
+impl<D: Digit> BigFixed<D> for BigFixedVec<D> {
     // fix position then remove redundant body data
     pub fn format(&mut self) -> Result<(), BigFixedError> {
         if self.head != 0 {

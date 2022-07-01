@@ -272,6 +272,46 @@ macro_rules! op_to_op_assign {
             }
         }
     };
+    (
+        $op: ident, $op_fn_name: ident,
+        $op_assign: ident, $op_assign_fn_name: ident,
+        $self_type: ty, $other_type: ty,
+        $output_type: ty
+    ) => {
+        // &a + b
+        impl $op<$other_type> for &$self_type {
+            type Output = $output_type;
+            fn $op_fn_name(self, other: $other_type) -> $output_type {
+                self.$op_fn_name(&other)
+            }
+        }
+        // a + &b
+        impl $op<&$other_type> for $self_type {
+            type Output = $output_type;
+            fn $op_fn_name(self, other: &$other_type) -> $output_type {
+                (&self).$op_fn_name(other)
+            }
+        }
+        // a + b
+        impl $op<$other_type> for $self_type {
+            type Output = $output_type;
+            fn $op_fn_name(self, other: $other_type) -> $output_type {
+                (&self).$op_fn_name(&other)
+            }
+        }
+        // a += &b
+        impl $op_assign<&$other_type> for $self_type {
+            fn $op_assign_fn_name(&mut self, other: &$other_type) {
+                *self = self.$op_fn_name(other)
+            }
+        }
+        // a += b
+        impl $op_assign<$other_type> for $self_type {
+            fn $op_assign_fn_name(&mut self, other: $other_type) {
+                *self = self.$op_fn_name(&other)
+            }
+        }
+    };
 }
 pub(crate) use op_to_op_assign;
 
