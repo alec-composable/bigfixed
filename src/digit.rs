@@ -3,7 +3,7 @@
 
 use paste::paste;
 use num_traits::PrimInt;
-use core::{cmp::{PartialEq, Eq, Ordering}, fmt::{Debug},
+use core::{cmp::{PartialEq, Eq, Ordering}, fmt, fmt::{Debug, Display},
     ops::{
         Add, AddAssign,
         BitAnd, BitAndAssign,
@@ -35,6 +35,7 @@ pub trait Digit:
     Eq + Debug + Clone + Copy
     + Arithmetic<u8, Self> + Arithmetic<u16, Self> + Arithmetic<u32, Self> + Arithmetic<u64, Self> + Arithmetic<u128, Self> + Arithmetic<usize, Self>
     + Arithmetic<Self, Self> + Arithmetic<<Self as Digit>::Digit, Self>
+    + Display
 {
     const DIGITBITS: usize;
     const DIGITBYTES: usize;
@@ -66,9 +67,7 @@ pub trait Digit:
 
     fn div(dividend_high: &Self::Digit, dividend_low: &Self::Digit, denominator: &Self::Digit, quotient: &mut Self::Digit);
 
-    fn deref(&self) -> Self {
-        *self
-    }
+    fn value(&self) -> Self::Digit;
 }
 
 macro_rules! build_digit {
@@ -129,6 +128,10 @@ macro_rules! build_digit {
                     let divisor = *divisor as Self::DoubleDigit;
                     *quotient = (dividend / divisor) as Self::Digit;
                 }
+
+                fn value(&self) -> Self::Digit {
+                    self.value
+                }
             }
 
             converters!($bits);
@@ -136,6 +139,12 @@ macro_rules! build_digit {
             arithmetics!($bits);
 
             impl Arithmetic<[<Digit $bits>], [<Digit $bits>]> for [<Digit $bits>] {}
+
+            impl Display for [<Digit $bits>] {
+                fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+                    write!(f, "{}", self.value)
+                }
+            }
         }
     };
 }

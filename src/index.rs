@@ -100,10 +100,10 @@ impl<D: Digit> Index<D> {
         }
     }
 
-    pub fn bit_position_excess(&self) -> Result<isize, IndexError> {
+    pub fn bit_position_excess(&self) -> Result<usize, IndexError> {
         match self {
             Position(_) => Ok(0),
-            Bit(x) => Ok(x.rem_euclid(D::DIGITBITS as isize)),
+            Bit(x) => Ok(x.rem_euclid(D::DIGITBITS as isize) as usize),
             DigitTypeInUse(_) => Err(UsedDigitTypeAsIndex)
         }
     }
