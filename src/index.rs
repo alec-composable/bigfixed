@@ -196,7 +196,7 @@ impl<D: Digit> From<&Index<D>> for isize {
 
 impl<D: Digit> From<Index<D>> for isize {
     fn from(a: Index<D>) -> isize {
-        isize::from(&a)
+        a.value().unwrap()
     }
 }
 
@@ -212,7 +212,7 @@ impl<D: Digit> From<&Index<D>> for usize {
 
 impl<D: Digit> From<Index<D>> for usize {
     fn from(a: Index<D>) -> usize {
-        usize::from(&a)
+        a.value().unwrap() as usize
     }
 }
 

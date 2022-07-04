@@ -1,4 +1,4 @@
-use crate::{digit::*, Index, Cutoff, BigFixed, BigFixedError, macros::*};
+use crate::{digit::*, Index, Cutoff, CutsOff, BigFixed, BigFixedVec, BigFixedError, macros::*};
 
 use std::{
     ops::{
@@ -15,49 +15,46 @@ use std::{
     cmp::{max, min, Ordering}
 };
 
-impl BigFixed {
+impl<D: Digit> BigFixedVec<D> {
     // Add digit into position and handle carries
-    pub fn add_digit(&mut self, d: Digit, position: Index) -> Result<(), BigFixedError> {
+    pub fn add_digit(&mut self, d: D, position: Index<D>) -> Result<(), BigFixedError> {
         assert!(self.properly_positioned());
         if let Index::Bit(_) = position {
-            let diff = position.bit_position_excess();
+            let diff = position.bit_position_excess()?;
             if diff == 0 {
-                return self.add_digit(d, position.cast_to_position());
+                return self.add_digit(d, position.cast_to_position()?);
             }
-            let as_position = position.cast_to_position();
-            self.add_digit(d >> (DIGITBITS as isize - diff), (as_position + Index::Position(1))?)?;
+            let as_position = position.cast_to_position()?;
+            self.add_digit(d >> (D::DIGITBITS as usize - diff), (as_position + Index::Position(1))?)?;
             self.add_digit(d << diff, as_position)?;
             return Ok(())
         }
         self.ensure_valid_position(position)?;
-        let mut res;
-        let mut carry;
-        add!(self[position], d, res, carry);
-        self[position] = res;
+        let mut carry = D::ZERO;
+        D::add_full(self[position], d, &mut self[position], &mut carry);
         let high = self.body_high()?;
         let mut on_position = (position + 1isize)?;
-        while carry == 1 && on_position < high {
-            add!(self[on_position], 1, res, carry);
-            self[on_position] = res;
-            on_position += 1isize;
+        while carry == D::ONE && on_position < high {
+            D::add_full(self[on_position], D::ONE, &mut self[on_position], &mut carry);
+            on_position += Index::Position(1);
         }
         // overflow cases
-        if carry == 1 {
-            if self.is_neg() {
-                self.head = 0;
+        if carry == D::ONE {
+            if self.is_neg()? {
+                self.head = D::ZERO;
             } else {
-                self[high] = 1;
+                self[high] = D::ONE;
             }
         };
         Ok(())
     }
 
     pub fn increment(&mut self) -> Result<(), BigFixedError> {
-        self.add_digit(1, Index::Position(0))
+        self.add_digit(D::ONE, Index::Position(0))
     }
 
     // add_digit but leaves (positionally entire) head unchanged
-    pub fn add_digit_drop_overflow(&mut self, d: Digit, position: Index) -> Result<(), BigFixedError> {
+    pub fn add_digit_drop_overflow(&mut self, d: D, position: Index<D>) -> Result<(), BigFixedError> {
         assert!(self.properly_positioned());
         if position >= self.body_high()? {
             // already overflows
@@ -65,23 +62,20 @@ impl BigFixed {
         }
         if let Index::Bit(_b) = position {
             if let Index::Bit(_) = position {
-                let diff = position.bit_position_excess();
-                let as_position = position.cast_to_position();
-                self.add_digit_drop_overflow(d >> (DIGITBITS as isize - diff), (as_position + Index::Position(1))?)?;
+                let diff = position.bit_position_excess()?;
+                let as_position = position.cast_to_position()?;
+                self.add_digit_drop_overflow(d >> (D::DIGITBITS as usize - diff), (as_position + Index::Position(1))?)?;
                 self.add_digit_drop_overflow(d << diff, as_position)?;
                 return Ok(())
             }
         }
         self.ensure_valid_position(position)?;
-        let mut res;
-        let mut carry;
-        add!(self[position], d, res, carry);
-        self[position] = res;
+        let mut carry = D::ZERO;
+        D::add_full(self[position], d, &mut self[position], &mut carry);
         let high = self.body_high()?;
         let mut on_position = (position + 1isize)?;
-        while carry == 1 && on_position < high {
-            add!(self[on_position], 1, res, carry);
-            self[on_position] = res;
+        while carry == D::ONE && on_position < high {
+            D::add_full(self[on_position], D::ONE, &mut self[on_position], &mut carry);
             on_position += 1isize;
         }
         Ok(())
@@ -93,13 +87,13 @@ impl BigFixed {
         for i in 0..self.body.len() {
             self.body[i] = !self.body[i];
         }
-        self.add_digit(1, self.position)?;
+        self.add_digit(D::ONE, self.position)?;
         self.format()?;
         Ok(())
     }
 
-    pub fn abs(&self) -> Result<BigFixed, BigFixedError> {
-        if self.is_neg() {
+    pub fn abs(&self) -> Result<BigFixedVec<D>, BigFixedError> {
+        if self.is_neg()? {
             let mut copy = self.clone();
             copy.negate()?;
             Ok(copy)
@@ -108,26 +102,26 @@ impl BigFixed {
         }
     }
 
-    pub fn add_assign(&mut self, other: &BigFixed) -> Result<(), BigFixedError> {
+    pub fn add_assign(&mut self, other: &BigFixedVec<D>) -> Result<(), BigFixedError> {
         self.fix_position()?;
         let position = min(self.position, other.position);
         // one more for overflow
         let high = (max(self.body_high()?, other.body_high()?) + Index::Position(1))?;
         self.ensure_valid_range(position, high)?;
-        let other_low = other.position.cast_to_position();
-        for i in other_low.value()..high.value() {
+        let other_low = other.position.cast_to_position()?;
+        for i in other_low.value()?..high.value()? {
             let p = Index::Position(i);
             self.add_digit_drop_overflow(other[p], p)?;
         }
-        self.head = if self[(high - Index::Position(1))?] >= GREATESTBIT {
-            ALLONES
+        self.head = if self[(high - Index::Position(1))?] >= D::GREATESTBIT {
+            D::ALLONES
         } else {
-            0
+            D::ZERO
         };
         self.format()
     }
 
-    pub fn bitand_assign(&mut self, other: &BigFixed) -> Result<(), BigFixedError> {
+    pub fn bitand_assign(&mut self, other: &BigFixedVec<D>) -> Result<(), BigFixedError> {
         self.fix_position()?;
         // align self valid range
         let position = min(self.position, other.position);
@@ -142,7 +136,7 @@ impl BigFixed {
         self.format()
     }
 
-    pub fn bitor_assign(&mut self, other: &BigFixed) -> Result<(), BigFixedError> {
+    pub fn bitor_assign(&mut self, other: &BigFixedVec<D>) -> Result<(), BigFixedError> {
         self.fix_position()?;
         // align self valid range
         let position = min(self.position, other.position);
@@ -157,7 +151,7 @@ impl BigFixed {
         self.format()
     }
 
-    pub fn bitxor_assign(&mut self, other: &BigFixed) -> Result<(), BigFixedError> {
+    pub fn bitxor_assign(&mut self, other: &BigFixedVec<D>) -> Result<(), BigFixedError> {
         // align self valid range
         let position = min(self.position, other.position);
         let high = max(self.body_high()?, other.body_high()?);
@@ -171,56 +165,56 @@ impl BigFixed {
         self.format()
     }
 
-    pub fn mul_assign(&mut self, other: &BigFixed) -> Result<(), BigFixedError> {
+    pub fn mul_assign(&mut self, other: &BigFixedVec<D>) -> Result<(), BigFixedError> {
         self.fix_position()?;
         assert!(other.properly_positioned());
         // have to check for 0 anyway because of -0 issues, might as well check at the top
-        if self.is_zero() {
+        if self.is_zero()? {
             return Ok(());
         }
-        if other.is_zero() {
+        if other.is_zero()? {
             self.overwrite(other);
             return Ok(());
         }
         let low = (self.position + other.position)?;
         self.position = Index::Position(0);
         let mut self_len = self.body.len();
-        if self.is_neg() {
+        if self.is_neg()? {
             self_len += 1;
         }
         let mut other_len = other.body.len();
-        if other.is_neg() {
+        if other.is_neg()? {
             other_len += 1;
         }
         let len = 2*max(self_len, other_len);
         self.body.resize(len, self.head);
         let mut other_base;
-        let mut prod_res;
-        let mut prod_carry;
+        let mut prod_res = D::ZERO;
+        let mut prod_carry = D::ZERO;
         let mut sum_res;
-        let mut sum_carry;
+        let mut sum_carry = D::ZERO;
         let mut total_carry;
         let mut summ_res;
-        let mut summ_carry;
+        let mut summ_carry = D::ZERO;
         let mut totall_carry;
         for i in (0..len).rev() {
-            sum_res = 0;
-            total_carry = 0;
-            summ_res = 0;
-            totall_carry = 0;
+            sum_res = D::ZERO;
+            total_carry = D::ZERO;
+            summ_res = D::ZERO;
+            totall_carry = D::ZERO;
             for j in 0..=i {
                 other_base = (other.position + i)?;
-                mul!(self.body[j], other[(other_base - j)?], prod_res, prod_carry);
-                add!(sum_res, prod_res, sum_res, sum_carry);
+                D::mul_full(self.body[j], other[(other_base - j)?], &mut prod_res, &mut prod_carry);
+                D::add_full(sum_res, prod_res, &mut sum_res, &mut sum_carry);
                 total_carry += sum_carry;
-                add!(summ_res, prod_carry, summ_res, summ_carry);
+                D::add_full(summ_res, prod_carry, &mut summ_res, &mut summ_carry);
                 totall_carry += summ_carry;
             }
-            self.body[i] = 0;
-            self.add_digit_drop_overflow(sum_res, Index::Position(Index::castsize(i)?))?;
-            self.add_digit_drop_overflow(total_carry, Index::Position(Index::castsize(i + 1)?))?;
-            self.add_digit_drop_overflow(summ_res, Index::Position(Index::castsize(i + 1)?))?;
-            self.add_digit_drop_overflow(totall_carry, Index::Position(Index::castsize(i + 2)?))?;
+            self.body[i] = D::ZERO;
+            self.add_digit_drop_overflow(sum_res, Index::Position(Index::<D>::castsize(i)?))?;
+            self.add_digit_drop_overflow(total_carry, Index::Position(Index::<D>::castsize(i + 1)?))?;
+            self.add_digit_drop_overflow(summ_res, Index::Position(Index::<D>::castsize(i + 1)?))?;
+            self.add_digit_drop_overflow(totall_carry, Index::Position(Index::<D>::castsize(i + 2)?))?;
         }
         self.head = self.head ^ other.head;
         self.position = low;
@@ -228,19 +222,19 @@ impl BigFixed {
     }
 
     pub fn shl_assign(&mut self, amount: &usize) -> Result<(), BigFixedError> {
-        self.position = (self.position + Index::Bit(Index::castsize(*amount)?))?;
+        self.position = (self.position + Index::Bit(Index::<D>::castsize(*amount)?))?;
         self.format()?;
         Ok(())
     }
     
     pub fn shr_assign(&mut self, amount: &usize) -> Result<(), BigFixedError> {
-        self.position = (self.position - Index::Bit(Index::castsize(*amount)?))?;
+        self.position = (self.position - Index::Bit(Index::<D>::castsize(*amount)?))?;
         self.format()?;
         Ok(())
     }
 
     // could save a few runtime steps by making a subtract_digit method but this is easier to build
-    pub fn sub_assign(&mut self, other: &BigFixed) -> Result<(), BigFixedError> {
+    pub fn sub_assign(&mut self, other: &BigFixedVec<D>) -> Result<(), BigFixedError> {
         self.negate()?;
         self.add_assign(other)?;
         self.negate()?;
@@ -251,53 +245,43 @@ impl BigFixed {
 /*
 op_assign_to_op!(op, op_fn_name, op_assign, op_assign_fn_name, self_type, other_type, result_type, error_type)
 */
-op_assign_to_op!(Add, add, AddAssign, add_assign, BigFixed, BigFixed, BigFixed, BigFixedError);
-op_assign_to_op!(BitAnd, bitand, BitAndAssign, bitand_assign, BigFixed, BigFixed, BigFixed, BigFixedError);
-op_assign_to_op!(BitOr, bitor, BitOrAssign, bitor_assign, BigFixed, BigFixed, BigFixed, BigFixedError);
-op_assign_to_op!(BitXor, bitxor, BitXorAssign, bitxor_assign, BigFixed, BigFixed, BigFixed, BigFixedError);
-op_assign_to_op!(Mul, mul, MulAssign, mul_assign, BigFixed, BigFixed, BigFixed, BigFixedError);
-op_assign_to_op!(Shl, shl, ShlAssign, shl_assign, BigFixed, usize, BigFixed, BigFixedError);
-op_assign_to_op!(Shr, shr, ShrAssign, shr_assign, BigFixed, usize, BigFixed, BigFixedError);
-op_assign_to_op!(Sub, sub, SubAssign, sub_assign, BigFixed, BigFixed, BigFixed, BigFixedError);
+op_assign_to_op!(D, Digit, Add, add, AddAssign, add_assign, BigFixedVec<D>, BigFixedVec<D>, BigFixedVec<D>, BigFixedError);
+op_assign_to_op!(D, Digit, BitAnd, bitand, BitAndAssign, bitand_assign, BigFixedVec<D>, BigFixedVec<D>, BigFixedVec<D>, BigFixedError);
+op_assign_to_op!(D, Digit, BitOr, bitor, BitOrAssign, bitor_assign, BigFixedVec<D>, BigFixedVec<D>, BigFixedVec<D>, BigFixedError);
+op_assign_to_op!(D, Digit, BitXor, bitxor, BitXorAssign, bitxor_assign, BigFixedVec<D>, BigFixedVec<D>, BigFixedVec<D>, BigFixedError);
+op_assign_to_op!(D, Digit, Mul, mul, MulAssign, mul_assign, BigFixedVec<D>, BigFixedVec<D>, BigFixedVec<D>, BigFixedError);
+op_assign_to_op!(D, Digit, Shl, shl, ShlAssign, shl_assign, BigFixedVec<D>, usize, BigFixedVec<D>, BigFixedError);
+op_assign_to_op!(D, Digit, Shr, shr, ShrAssign, shr_assign, BigFixedVec<D>, usize, BigFixedVec<D>, BigFixedError);
+op_assign_to_op!(D, Digit, Sub, sub, SubAssign, sub_assign, BigFixedVec<D>, BigFixedVec<D>, BigFixedVec<D>, BigFixedError);
 
 // additive and bitwise negation are the same thing via the geometric series trick for truncating binary expansions
-unary!(Neg, neg, BigFixed, negate, BigFixed, BigFixedError);
-unary!(Not, not, BigFixed, negate, BigFixed, BigFixedError);
+unary!(D, Digit, Neg, neg, BigFixedVec<D>, negate, BigFixedVec<D>, BigFixedError);
+unary!(D, Digit, Not, not, BigFixedVec<D>, negate, BigFixedVec<D>, BigFixedError);
 
 // Rem and RemAssign depend on division
 
 // division section --
 
-impl BigFixed {
-    pub fn high_double_digit(&self) -> Result<SignedDoubleDigit, BigFixedError> {
-        assert!(self.properly_positioned(), "improperly positioned");
-        Ok (
-            (
-                ((self[self.body_high()?] as DoubleDigit) << DIGITBITS)
-                | ((self[(self.body_high()? - Index::Position(1))?] as DoubleDigit))
-            ) as SignedDoubleDigit
-        )
-    }
-
-    pub fn combined_div(num: &mut BigFixed, denom: &BigFixed, end: Cutoff) -> Result<BigFixed, BigFixedError> {
+impl<D: Digit> BigFixedVec<D> {
+    pub fn combined_div(num: &mut BigFixedVec<D>, denom: &BigFixedVec<D>, end: Cutoff<D>) -> Result<BigFixedVec<D>, BigFixedError> {
         // Iteratively subtract the highest multiple of the highest shift of denom from num, storing into quotient. Num is replaced by the remainder at each step.
         // Go until num (the remainder) is small enough so that num / denom has 0s in all positions >= -to, i.e. num < denom / base^to.
         // sign stuff
-        let mut quotient = BigFixed::from(0);
+        let mut quotient = BigFixedVec::from(0);
         if &*num < &quotient {
             num.negate()?;
-            quotient = BigFixed::combined_div(num, denom, end)?;
+            quotient = BigFixedVec::combined_div(num, denom, end)?;
             num.negate()?;
             quotient.negate()?;
             return Ok(quotient);
         }
         if denom < &quotient {
-            quotient = BigFixed::combined_div(num, &(-denom)?, end)?;
+            quotient = BigFixedVec::combined_div(num, &(-denom)?, end)?;
             num.negate()?;
             quotient.negate()?;
             return Ok(quotient);
         }
-        assert!(!denom.is_zero(), "divide by zero");
+        assert!(!denom.is_zero()?, "divide by zero");
         assert!(&*num >= &quotient && denom >= &quotient, "sign issue");
 
         // starting the actual division
@@ -307,32 +291,32 @@ impl BigFixed {
         let mut position = (num.body_high()? - 1isize)?;
         //println!("num\t{:?}", num);
         //println!("denom\t{:?}", denom);
-        let mut prod = BigFixed::from(0);
-        while !num.is_zero() && quotient.cutoff_index(end)? <= quotient.position {
+        let mut prod = BigFixedVec::from(0);
+        while !num.is_zero()? && quotient.cutoff_index(end)? <= quotient.position {
             //println!("___________________");
             //println!("division step {}", position);
             //println!("looped because {:?} is nonzero and {} <= {}", num, quotient.cutoff_index(end)?, quotient.position);
             shifted_denom.position = (position - denom_tail_len)?;
             //println!("shift d\t{:?}", shifted_denom);
-            let mut quot;
+            let mut quot = D::ZERO;
             //println!("num\t{:?}", num);
             //println!("position {}", position);
-            div!(num[(position + 1isize)?], num[position], shifted_denom[position], quot);
-            prod = BigFixed::from(quot);
+            D::div(num[(position + Index::Position(1))?], num[position], shifted_denom[position], &mut quot);
+            prod = BigFixedVec::from(quot);
             //println!("quot {}", quot);
             //println!("prod\t{:?}", prod);
             prod *= &shifted_denom;
             //println!("scaled\t{:?}", prod);
-            while &prod < num && quot < ALLONES {
+            while &prod < num && quot < D::ALLONES {
                 //println!("incrementing");
-                quot += 1;
+                quot += D::ONE;
                 //println!("prod\t{:?}", prod);
                 prod += &shifted_denom;
                 //println!("prod\t{:?}", prod);
             }
-            while &prod > num && quot > 0 {
+            while &prod > num && quot > D::ZERO {
                 //println!("decrementing");
-                quot -= 1;
+                quot -= D::ONE;
                 //println!("prod\t{:?}", prod);
                 prod -= &shifted_denom;
                 //println!("prod\t{:?}", prod);
@@ -359,7 +343,7 @@ impl BigFixed {
         Ok(quotient)
     }
 
-    pub fn to_digits(&self, base: &BigFixed) -> Result<(Vec<BigFixed>, isize), BigFixedError> {
+    pub fn to_digits(&self, base: &BigFixedVec<D>) -> Result<(Vec<BigFixedVec<D>>, isize), BigFixedError> {
         let mut shifting = self.abs()?.clone();
         let mut neg_count: isize = 0;
         //println!("to digits\t{:?}", shifting);
@@ -369,8 +353,8 @@ impl BigFixed {
         }
         //println!("to digits starting with {:?} which has been shifted {}", shifting, neg_count);
         let mut digits = vec![];
-        while !shifting.is_zero() {
-            let quot = BigFixed::combined_div(&mut shifting, base, Cutoff::INTEGER)?;
+        while !shifting.is_zero()? {
+            let quot = BigFixedVec::combined_div(&mut shifting, base, Cutoff::INTEGER)?;
             digits.push(shifting.clone());
             shifting = quot;
         }
@@ -379,7 +363,7 @@ impl BigFixed {
     }
 
     pub fn to_digits_10(&self) -> Result<(Vec<i32>, isize), BigFixedError> {
-        let (big_digits, point) = self.to_digits(&BigFixed::from(10))?;
+        let (big_digits, point) = self.to_digits(&BigFixedVec::from(10))?;
         let digits: Vec<i32> = big_digits.iter().map(|x| i32::from(x)).collect();
         Ok((digits, point))
     }
@@ -387,16 +371,16 @@ impl BigFixed {
 
 // -- end division section
 
-impl PartialOrd for BigFixed {
-    fn partial_cmp(&self, other: &BigFixed) -> Option<Ordering> {
-        let mut step_result = self.head.cmp(&other.head);
+impl<D: Digit> PartialOrd for BigFixedVec<D> {
+    fn partial_cmp(&self, other: &BigFixedVec<D>) -> Option<Ordering> {
+        let mut step_result = self.head.partial_cmp(&other.head)?;
         match step_result {
             Ordering::Equal => {
                 for i in (
-                    min(self.position.cast_to_position(), other.position.cast_to_position()).value()..
-                    (max(self.body_high().ok()?.cast_to_position(), other.body_high().ok()?.cast_to_position())).value()
+                    min(self.position.cast_to_position().ok()?, other.position.cast_to_position().ok()?).value().ok()?..
+                    (max(self.body_high().ok()?.cast_to_position().ok()?, other.body_high().ok()?.cast_to_position().ok()?)).value().ok()?
                 ).rev() {
-                    step_result = self[i].cmp(&other[i]);
+                    step_result = self[i].partial_cmp(&other[i])?;
                     match step_result {
                         Ordering::Equal => continue,
                         x => return Some(x)

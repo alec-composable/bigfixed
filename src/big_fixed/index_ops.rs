@@ -10,21 +10,22 @@ impl<D: Digit> Index<Indx<D>> for BigFixedVec<D> {
             Indx::Position(_) => {
                 let shifted = (position - self.position).unwrap();
                 if shifted >= self.body.len() as isize {
-                    &self.head.into()
+                    &self.head
                 } else if shifted >= 0isize {
-                    &self.body[usize::from(shifted)].into()
+                    &self.body[usize::from(shifted)]
                 } else {
-                    &D::ZEROD
+                    &self.zero_copy
                 }
             },
             Indx::Bit(b) => {
                 let d = self[Indx::Position(Indx::<D>::bit_to_position(b))];
                 if (d >> position.bit_position_excess().unwrap()) & D::ONE == D::ONE {
-                    &D::ONED
+                    &self.one_copy
                 } else {
-                    &D::ZEROD
+                    &self.zero_copy
                 }
-            }
+            },
+            Indx::DigitTypeInUse(_) => panic!("cannot properly position")
         }
     }
 }

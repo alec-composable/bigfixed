@@ -22,6 +22,26 @@ macro_rules! unary {
             }
         }
     };
+    ($parameter: ident, $bound: path, $op: ident, $op_fn_name: ident, $self_type: ty, $fn_name: ident, $output_type: ty, $error_type: ty) => {
+        // -&a
+        impl<$parameter: $bound> $op for &$self_type {
+            type Output = Result<$output_type, $error_type>;
+            fn $op_fn_name(self) -> Result<$output_type, $error_type> {
+                let mut returner = self.clone();
+                returner.$fn_name()?;
+                Ok(returner)
+            }
+        }
+        // -a
+        impl<$parameter: $bound> $op for $self_type {
+            type Output = Result<$self_type, $error_type>;
+            fn $op_fn_name(self) -> Result<$self_type, $error_type> {
+                let mut returner = self.clone();
+                returner.$fn_name()?;
+                Ok(returner)
+            }
+        }
+    };
 }
 pub(crate) use unary;
 
@@ -133,6 +153,69 @@ macro_rules! op_assign_to_op {
 
         // a + b
         impl $op<$other_type> for $self_type {
+            type Output = $result_type;
+            fn $op_fn_name(self, other: $other_type) -> $result_type {
+                <$self_type>::$op_fn_name(&self, &other).unwrap()
+            }
+        }
+    };
+    // with parameter and bound
+    (
+        $parameter: ident, $bound: path,
+        $op: ident, $op_fn_name: ident,
+        $op_assign: ident, $op_assign_fn_name: ident,
+        $self_type: ty, $other_type: ty,
+        $result_type: ty, $error_type: ty
+    ) => {
+        // a += &b
+        impl<$parameter: $bound> $op_assign<&$other_type> for $self_type {
+            fn $op_assign_fn_name(&mut self, other: &$other_type) {
+                <$self_type>::$op_assign_fn_name(self, other).unwrap();
+            }
+        }
+
+        // a += b
+        impl<$parameter: $bound> $op_assign<$other_type> for $self_type {
+            fn $op_assign_fn_name(&mut self, other: $other_type) {
+                <$self_type>::$op_assign_fn_name(self, &other).unwrap();
+            }
+        }
+        
+        // a +. &b
+        impl<$parameter: $bound> $self_type {
+            pub fn $op_fn_name(&self, other: &$other_type) -> Result<$result_type, $error_type> {
+                let mut res = self.clone();
+                res.$op_assign_fn_name(other)?;
+                Ok(res)
+            }
+        }
+
+        // &a + &b
+        impl<$parameter: $bound> $op<&$other_type> for &$self_type {
+            type Output = $result_type;
+            fn $op_fn_name(self, other: &$other_type) -> $result_type {
+                <$self_type>::$op_fn_name(self, other).unwrap()
+            }
+        }
+
+        // &a + b
+        impl<$parameter: $bound> $op<$other_type> for &$self_type {
+            type Output = $result_type;
+            fn $op_fn_name(self, other: $other_type) -> $result_type {
+                <$self_type>::$op_fn_name(self, &other).unwrap()
+            }
+        }
+
+        // a + &b
+        impl<$parameter: $bound> $op<&$other_type> for $self_type {
+            type Output = $result_type;
+            fn $op_fn_name(self, other: &$other_type) -> $result_type {
+                <$self_type>::$op_fn_name(&self, other).unwrap()
+            }
+        }
+
+        // a + b
+        impl<$parameter: $bound> $op<$other_type> for $self_type {
             type Output = $result_type;
             fn $op_fn_name(self, other: $other_type) -> $result_type {
                 <$self_type>::$op_fn_name(&self, &other).unwrap()

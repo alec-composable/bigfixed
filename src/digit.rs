@@ -1,5 +1,7 @@
-// Digit specifies u* arithmetic (wrapping) from one of the native integer types. It could be hard coded as u32 or u64 but
-// the smaller types u16/u8 are easier to work with while developing and testing. Hence which one is in use is decided via this macro.
+// Digit specifies u* arithmetic (wrapping) from one of the native integer types. It would be really nice if we could just do
+// type (or enum) Digit = u8 | u16 | u32 | u64 | u128
+// But this is not possible. Instead we have to rebuild clones of the u* types and use them instead.
+// So we start with a num_traits PrimInt as the source and build up from there.
 
 use paste::paste;
 use num_traits::PrimInt;
@@ -25,7 +27,7 @@ pub trait Arithmetic<Other, Out>:
     + BitOr<Other, Output = Out> + BitOrAssign<Other>
     + BitXor<Other, Output = Out> + BitXorAssign<Other>
     + Mul<Other, Output = Out> + MulAssign<Other>
-    + Neg + Not
+    + Neg<Output = Out> + Not<Output = Out>
     + Shl<Other, Output = Out> + ShlAssign<Other>
     + Shr<Other, Output = Out> + ShrAssign<Other>
     + Sub<Other, Output = Out> + SubAssign<Other>
@@ -33,8 +35,9 @@ pub trait Arithmetic<Other, Out>:
 
 pub trait Digit: 
     Eq + Debug + Clone + Copy
-    + Arithmetic<u8, Self> + Arithmetic<u16, Self> + Arithmetic<u32, Self> + Arithmetic<u64, Self> + Arithmetic<u128, Self> + Arithmetic<usize, Self>
-    + Arithmetic<Self, Self> + Arithmetic<<Self as Digit>::Digit, Self>
+    + Arithmetic<u8, Self> + Arithmetic<u16, Self> + Arithmetic<u32, Self>
+    + Arithmetic<u64, Self> + Arithmetic<u128, Self> + Arithmetic<usize, Self>
+    + Arithmetic<Self, Self>
     + Display
 {
     const DIGITBITS: usize;
@@ -47,25 +50,21 @@ pub trait Digit:
     type DoubleDigit: PrimInt;
     type SignedDoubleDigit: PrimInt;
 
-    const ZERO: Self::Digit;
-    const ONE: Self::Digit;
-    const ALLONES: Self::Digit;
-    const GREATESTBIT: Self::Digit;
+    const ZERO: Self;
+    const ONE: Self;
+    const ALLONES: Self;
+    const GREATESTBIT: Self;
 
-    const ZEROD: Self;
-    const ONED: Self;
-    const ALLONESD: Self;
-    const GREATESTBITD: Self;
+    fn digit_from_bytes(bytes: &[u8]) -> Self;
+    fn to_le_bytes<'a>(&self) -> Vec<u8>;
 
-    fn digit_from_bytes(bytes: &[u8]) -> Self::Digit;
+    fn add(a: Self, b: Self, result: &mut Self);
+    fn add_full(a: Self, b: Self, result: &mut Self, carry: &mut Self);
 
-    fn add(a: &Self::Digit, b: &Self::Digit, result: &mut Self::Digit);
-    fn add_full(a: &Self::Digit, b: &Self::Digit, result: &mut Self::Digit, carry: &mut Self::Digit);
+    fn mul(a: Self, b: Self, result: &mut Self);
+    fn mul_full(a: Self, b: Self, result: &mut Self, carry: &mut Self);
 
-    fn mul(a: &Self::Digit, b: &Self::Digit, result: &mut Self::Digit);
-    fn mul_full(a: &Self::Digit, b: &Self::Digit, result: &mut Self::Digit, carry: &mut Self::Digit);
-
-    fn div(dividend_high: &Self::Digit, dividend_low: &Self::Digit, denominator: &Self::Digit, quotient: &mut Self::Digit);
+    fn div(dividend_high: Self, dividend_low: Self, denominator: Self, quotient: &mut Self);
 
     fn value(&self) -> Self::Digit;
 }
@@ -89,44 +88,45 @@ macro_rules! build_digit {
                 type DoubleDigit = [<u $double_bits>];
                 type SignedDoubleDigit = [<i $double_bits>];
 
-                const ZERO: Self::Digit = 0 as Self::Digit;
-                const ONE: Self::Digit = 1 as Self::Digit;
-                const ALLONES: Self::Digit = (-1 as Self::SignedDigit) as Self::Digit;
-                const GREATESTBIT: Self::Digit = 1 << (Self::DIGITBITS - 1);
+                const ZERO: Self = Self {value: 0};
+                const ONE: Self = Self {value: 1};
+                const ALLONES: Self = Self {value: !Self::ZERO.value};
+                const GREATESTBIT: Self = Self {value: !(Self::ALLONES.value >> 1usize)};
 
-                const ZEROD: Self = Self::ZERO.into();
-                const ONED: Self = Self::ONE.into();
-                const ALLONESD: Self = Self::ALLONES.into();
-                const GREATESTBITD: Self = Self::GREATESTBIT.into();
+                fn digit_from_bytes(bytes: &[u8]) -> Self {
+                    Self {
+                        value: Self::Digit::from_le_bytes(bytes.try_into().unwrap())
+                    }
+                }
 
-                fn digit_from_bytes(bytes: &[u8]) -> Self::Digit {
-                    Self::Digit::from_le_bytes(bytes.try_into().unwrap())
+                fn to_le_bytes(&self) -> Vec<u8> {
+                    self.value.to_le_bytes().into()
                 }
                 
-                fn add(a: &Self::Digit, b: &Self::Digit, result: &mut Self::Digit) {
-                    let res = (*a as Self::DoubleDigit) + (*b as Self::DoubleDigit);
-                    *result = res as Self::Digit;
+                fn add(a: Self, b: Self, result: &mut Self) {
+                    let res = (a.value as Self::DoubleDigit) + (b.value as Self::DoubleDigit);
+                    result.value = res as Self::Digit;
                 }
-                fn add_full(a: &Self::Digit, b: &Self::Digit, result: &mut Self::Digit, carry: &mut Self::Digit) {
-                    let res = (*a as Self::DoubleDigit) + (*b as Self::DoubleDigit);
-                    *result = res as Self::Digit;
-                    *carry = (res >> Self::DIGITBITS) as Self::Digit;
-                }
-                
-                fn mul(a: &Self::Digit, b: &Self::Digit, result: &mut Self::Digit) {
-                    let res = (*a as Self::DoubleDigit) * (*b as Self::DoubleDigit);
-                    *result = res as Self::Digit;
-                }
-                fn mul_full(a: &Self::Digit, b: &Self::Digit, result: &mut Self::Digit, carry: &mut Self::Digit) {
-                    let res = (*a as Self::DoubleDigit) * (*b as Self::DoubleDigit);
-                    *result = res as Self::Digit;
-                    *carry = (res >> Self::DIGITBITS) as Self::Digit;
+                fn add_full(a: Self, b: Self, result: &mut Self, carry: &mut Self) {
+                    let res = (a.value as Self::DoubleDigit) + (b.value as Self::DoubleDigit);
+                    result.value = res as Self::Digit;
+                    carry.value = (res >> Self::DIGITBITS) as Self::Digit;
                 }
                 
-                fn div(dividend_high: &Self::Digit, dividend_low: &Self::Digit, divisor: &Self::Digit, quotient: &mut Self::Digit) {
-                    let dividend = ((*dividend_high as Self::DoubleDigit) << Self::DIGITBITS) | (*dividend_low as Self::DoubleDigit);
-                    let divisor = *divisor as Self::DoubleDigit;
-                    *quotient = (dividend / divisor) as Self::Digit;
+                fn mul(a: Self, b: Self, result: &mut Self) {
+                    let res = (a.value as Self::DoubleDigit) * (b.value as Self::DoubleDigit);
+                    result.value = res as Self::Digit;
+                }
+                fn mul_full(a: Self, b: Self, result: &mut Self, carry: &mut Self) {
+                    let res = (a.value as Self::DoubleDigit) * (b.value as Self::DoubleDigit);
+                    result.value = res as Self::Digit;
+                    carry.value = (res >> Self::DIGITBITS) as Self::Digit;
+                }
+                
+                fn div(dividend_high: Self, dividend_low: Self, divisor: Self, quotient: &mut Self) {
+                    let dividend = ((dividend_high.value as Self::DoubleDigit) << Self::DIGITBITS) | (dividend_low.value as Self::DoubleDigit);
+                    let divisor = divisor.value as Self::DoubleDigit;
+                    quotient.value = (dividend / divisor) as Self::Digit;
                 }
 
                 fn value(&self) -> Self::Digit {
@@ -245,7 +245,7 @@ macro_rules! arithmetics {
                 type Output = [<Digit $digit_bits>];
                 fn $op_fn_name(self, other: &[<Digit $digit_bits>]) -> [<Digit $digit_bits>] {
                     [<Digit $digit_bits>] {
-                        value: self.value + <[<u $digit_bits>]>::from(other)
+                        value: self.value + <[<u $digit_bits>]>::from(other.value)
                     }
                 }
             }
