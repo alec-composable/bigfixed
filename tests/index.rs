@@ -1,4 +1,4 @@
-use bigfixed::{digit::*, Index, BigFixed};
+/*use bigfixed::{digit::*, Index, BigFixed};
 
 #[test]
 fn index_position() {
@@ -95,4 +95,4 @@ fn set_bit() {
         body: vec![0, ALLONES],
         position: Index::Position(-1)
     }).unwrap(), "one bit");
-}
+}*/

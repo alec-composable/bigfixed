@@ -1,4 +1,4 @@
-use bigfixed::{digit::*, Index, BigFixed};
+/*use bigfixed::{digit::*, Index, BigFixed};
 
 #[test]
 fn add_digit() {
@@ -271,4 +271,4 @@ fn div() {
     //let top = BigFixed::from(1).shift(Index::Position(5));
     //let bottom = BigFixed::from(17).shift(Index::Position(-3));
 
-}
+}*/

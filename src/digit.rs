@@ -74,7 +74,7 @@ macro_rules! build_digit {
         paste!{
             #[derive(PartialEq, Eq, Debug, Clone, Copy)]
             pub struct [<Digit $bits>] {
-                value: [<u $bits>]
+                pub value: [<u $bits>]
             }
 
             impl Digit for [<Digit $bits>] {

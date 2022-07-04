@@ -485,7 +485,7 @@ impl<D: Digit> fmt::Binary for BigFixedVec<D> {
             write!(f, ".").ok();
         };
         for p in (self.position.bit_value().unwrap()..=start).rev() {
-            //println!("p {}", p);
+            println!("p {}", p);
             write!(f, "{}", self[Index::Bit(p)]).ok();
             if p == 0 {
                 write!(f, ".").ok();

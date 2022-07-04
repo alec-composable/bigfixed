@@ -1,4 +1,4 @@
-use bigfixed::{digit::*, Index, BigFixed};
+/*use bigfixed::{digit::*, Index, BigFixed};
 
 use std::{iter};
 
@@ -99,4 +99,4 @@ fn floats() {
             assert_eq!(c, f64::from(BigFixed::from(c)), "f64 {}", c);
         }
     }
-}
+}*/
