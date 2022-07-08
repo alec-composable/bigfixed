@@ -1,6 +1,6 @@
 use crate::{digit::*, Index, IndexError, cutoff::*};
 
-use core::{fmt, /*ops as coreops,*/ ops::{Range}, iter::{repeat/*, Repeat, Chain, Take, Skip, Map*/}, cmp::{max, min}, convert::From, slice::{/*Iter,*/ IterMut}};
+use core::{fmt, ops as coreops, ops::{Range}, iter::{repeat/*, Repeat, Chain, Take, Skip, Map*/}, cmp::{max, min}, convert::From, slice::{/*Iter,*/ IterMut}};
 
 use std::error::Error;
 
@@ -47,6 +47,8 @@ pub struct BigFixedVec<D: Digit> {
 pub trait BigFixed<D: Digit>:
     Clone + PartialEq + Eq
     + CutsOff<D, BigFixedError>
+    + coreops::Index<Index<D>> + coreops::IndexMut<Index<D>>
+    
 {
     fn head(&self) -> D;
 
@@ -485,7 +487,7 @@ impl<D: Digit> fmt::Binary for BigFixedVec<D> {
             write!(f, ".").ok();
         };
         for p in (self.position.bit_value().unwrap()..=start).rev() {
-            println!("p {}", p);
+            //println!("p {}", p);
             write!(f, "{}", self[Index::Bit(p)]).ok();
             if p == 0 {
                 write!(f, ".").ok();

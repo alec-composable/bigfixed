@@ -1,313 +1,188 @@
-// Digit specifies u* arithmetic (wrapping) from one of the native integer types. It would be really nice if we could just do
-// type (or enum) Digit = u8 | u16 | u32 | u64 | u128
-// But this is not possible. Instead we have to rebuild clones of the u* types and use them instead.
-// So we start with a num_traits PrimInt as the source and build up from there.
+/*
+    Digit is a generalizaiton of unsigned integer arithmetic. Basically everything that the u* natives have in common.
+
+    Digit captures the properties of the numbers D = {0, 1, 2, ..., 2^n-1} with cyclic (wrapping) arithmetic.
+    Equality and ordering respect the number representatives listed above: 0 through 2^n-1.
+
+    Arithmetic and overflow are well-defined. If x,y are two Digits (elements of D) then
+        x+y = a*2^n + b
+    where a,b are also Digits. We call a the overflow and b the result. The same goes for multiplication.
+
+    Subtraction is defined via negation where -a = 2^n-a (except -0 = 0); this operation is closed on the set D.
+    
+    Division and remainder are defined as integer division: dividing x by the nonzero Digit y gives Digits q,r where
+        x = qy + r,
+        0 <= r < y.
+    Here q is the quotient (div) and r the remainder (rem).
+    
+    We choose D to have 2^n elements so that we can talk about binary representations. With this comes all
+    the bitwise operations: BitAnd, BitOr, BitXor, Not, Shl, Shr. Right shifting pads with 0s from the left.
+
+    There are special constants with each value of n defining D. The numbers 0 and 1 are self explanatory.
+    The number 2^n-1, the maximal element of D, is called ALLONES. Its binary representation is 11111...111.
+    Another useful constant is 2^(n-1) with binary representation 10000....000. This is called GREATESTBIT.
+
+    Any Digit can be cast back and forth from all the native u* types. This is a direct bit cast just like
+    how the u* types convert between each other using the 'as' keyword. Digits can be cast to other Digits too.
+
+    Because we can't implement existing traits on native u* types, some of the traits are instead hard coded.
+
+    The type u128 is not made into a Digit because there is no u256 for evaluating the full operations.
+*/
 
 use paste::paste;
-use num_traits::PrimInt;
-use core::{cmp::{PartialEq, Eq, Ordering}, fmt, fmt::{Debug, Display},
+
+use core::{cmp::{PartialEq, Eq}, fmt,
     ops::{
         Add, AddAssign,
         BitAnd, BitAndAssign,
         BitOr, BitOrAssign,
         BitXor, BitXorAssign,
+        Div, DivAssign,
         Mul, MulAssign,
-        Neg, Not,
+        Not,
+        Rem, RemAssign,
         Shl, ShlAssign,
         Shr, ShrAssign,
         Sub, SubAssign
     }
 };
-use crate::op_to_op_assign;
 
-pub trait Arithmetic<Other, Out>: 
-    From<Other> + Into<Other> + PartialEq<Other> + PartialOrd<Other>
-    + Add<Other, Output = Out> + AddAssign<Other>
-    + BitAnd<Other, Output = Out> + BitAndAssign<Other>
-    + BitOr<Other, Output = Out> + BitOrAssign<Other>
-    + BitXor<Other, Output = Out> + BitXorAssign<Other>
-    + Mul<Other, Output = Out> + MulAssign<Other>
-    + Neg<Output = Out> + Not<Output = Out>
-    + Shl<Other, Output = Out> + ShlAssign<Other>
-    + Shr<Other, Output = Out> + ShrAssign<Other>
-    + Sub<Other, Output = Out> + SubAssign<Other>
-{}
-
-pub trait Digit: 
-    Eq + Debug + Clone + Copy
-    + Arithmetic<u8, Self> + Arithmetic<u16, Self> + Arithmetic<u32, Self>
-    + Arithmetic<u64, Self> + Arithmetic<u128, Self> + Arithmetic<usize, Self>
-    + Arithmetic<Self, Self>
-    + Display
+pub trait Digit:
+    Clone + Copy + PartialEq + Eq + PartialOrd
+    + Add<Self, Output = Self> + AddAssign<Self>
+    + BitAnd<Self, Output = Self> + BitAndAssign<Self>
+    + BitOr<Self, Output = Self> + BitOrAssign<Self>
+    + BitXor<Self, Output = Self> + BitXorAssign<Self>
+    + Div<Self, Output = Self> + DivAssign<Self>
+    + Mul<Self, Output = Self> + MulAssign<Self>
+    + Not<Output = Self>
+    + Rem<Self, Output = Self> + RemAssign<Self>
+    + Shl<Self, Output = Self> + ShlAssign<Self>
+    + Shr<Self, Output = Self> + ShrAssign<Self>
+    + Shl<usize, Output = Self> + ShlAssign<usize>
+    + Shr<usize, Output = Self> + ShrAssign<usize>
+    + Sub<Self, Output = Self> + SubAssign<Self>
+    + fmt::Display + fmt::Debug + fmt::Octal + fmt::LowerHex + fmt::UpperHex + fmt::Binary
 {
     const DIGITBITS: usize;
-    const DIGITBYTES: usize;
-    type Digit: PrimInt;
-    type SignedDigit: PrimInt;
-
-    const DOUBLEBITS: usize;
-    const DOUBLEBYTES: usize;
-    type DoubleDigit: PrimInt;
-    type SignedDoubleDigit: PrimInt;
+    const DIGITBYTES: usize = Self::DIGITBITS / 8;
 
     const ZERO: Self;
     const ONE: Self;
-    const ALLONES: Self;
     const GREATESTBIT: Self;
+    const ALLONES: Self;
 
-    fn digit_from_bytes(bytes: &[u8]) -> Self;
-    fn to_le_bytes<'a>(&self) -> Vec<u8>;
+    fn from_le_bytes(bytes: &[u8]) -> Self;
+    fn to_le_bytes(&self) -> Vec<u8>;
 
-    fn add(a: Self, b: Self, result: &mut Self);
-    fn add_full(a: Self, b: Self, result: &mut Self, carry: &mut Self);
+    // these combined calls evaluate the result and overflow simultaneously, storing the results in the respective mutable values
+    fn combined_add(x: Self, y: Self, result: &mut Self, carry: &mut Self);
+    fn combined_mul(x: Self, y: Self, result: &mut Self, carry: &mut Self);
 
-    fn mul(a: Self, b: Self, result: &mut Self);
-    fn mul_full(a: Self, b: Self, result: &mut Self, carry: &mut Self);
+    fn neg(&self) -> Self;
 
-    fn div(dividend_high: Self, dividend_low: Self, denominator: Self, quotient: &mut Self);
+    fn leading_zeros(&self) -> usize;
 
-    fn value(&self) -> Self::Digit;
+    fn from_u8(x: u8) -> Self;
+    fn from_u16(x: u16) -> Self;
+    fn from_u32(x: u32) -> Self;
+    fn from_u64(x: u64) -> Self;
+    fn from_u128(x: u128) -> Self;
+    fn from_usize(x: usize) -> Self;
+
+    fn to_u8(&self) -> u8;
+    fn to_u16(&self) -> u16;
+    fn to_u32(&self) -> u32;
+    fn to_u64(&self) -> u64;
+    fn to_u128(&self) -> u128;
+    fn to_usize(&self) -> usize;
 }
 
 macro_rules! build_digit {
-    ($bits: expr, $double_bits: expr) => {
-        paste!{
-            #[derive(PartialEq, Eq, Debug, Clone, Copy)]
-            pub struct [<Digit $bits>] {
-                pub value: [<u $bits>]
-            }
-
-            impl Digit for [<Digit $bits>] {
-                const DIGITBITS: usize = $bits;
-                const DIGITBYTES: usize = Self::DIGITBITS >> 3;
-                type Digit = [<u $bits>];
-                type SignedDigit = [<i $bits>];
-                
-                const DOUBLEBITS: usize = $double_bits;
-                const DOUBLEBYTES: usize = 2 * Self::DIGITBYTES;
-                type DoubleDigit = [<u $double_bits>];
-                type SignedDoubleDigit = [<i $double_bits>];
-
-                const ZERO: Self = Self {value: 0};
-                const ONE: Self = Self {value: 1};
-                const ALLONES: Self = Self {value: !Self::ZERO.value};
-                const GREATESTBIT: Self = Self {value: !(Self::ALLONES.value >> 1usize)};
-
-                fn digit_from_bytes(bytes: &[u8]) -> Self {
-                    Self {
-                        value: Self::Digit::from_le_bytes(bytes.try_into().unwrap())
-                    }
+    ($bits: expr) => {
+        paste! {
+            impl Digit for [<u $bits>] {
+                const DIGITBITS: usize = [<u $bits>]::BITS as usize;
+            
+                const ZERO: [<u $bits>] = 0;
+                const ONE: [<u $bits>] = 1;
+                const GREATESTBIT: [<u $bits>] = !((!0) >> 1);
+                const ALLONES: [<u $bits>] = !0;
+            
+                fn from_le_bytes(bytes: &[u8]) -> Self {
+                    let mut right_bytes = [0; Self::DIGITBYTES];
+                    right_bytes.copy_from_slice(bytes);
+                    <[<u $bits>]>::from_le_bytes(right_bytes)
                 }
-
                 fn to_le_bytes(&self) -> Vec<u8> {
-                    self.value.to_le_bytes().into()
+                    <[<u $bits>]>::to_le_bytes(*self).into()
                 }
-                
-                fn add(a: Self, b: Self, result: &mut Self) {
-                    let res = (a.value as Self::DoubleDigit) + (b.value as Self::DoubleDigit);
-                    result.value = res as Self::Digit;
-                }
-                fn add_full(a: Self, b: Self, result: &mut Self, carry: &mut Self) {
-                    let res = (a.value as Self::DoubleDigit) + (b.value as Self::DoubleDigit);
-                    result.value = res as Self::Digit;
-                    carry.value = (res >> Self::DIGITBITS) as Self::Digit;
-                }
-                
-                fn mul(a: Self, b: Self, result: &mut Self) {
-                    let res = (a.value as Self::DoubleDigit) * (b.value as Self::DoubleDigit);
-                    result.value = res as Self::Digit;
-                }
-                fn mul_full(a: Self, b: Self, result: &mut Self, carry: &mut Self) {
-                    let res = (a.value as Self::DoubleDigit) * (b.value as Self::DoubleDigit);
-                    result.value = res as Self::Digit;
-                    carry.value = (res >> Self::DIGITBITS) as Self::Digit;
-                }
-                
-                fn div(dividend_high: Self, dividend_low: Self, divisor: Self, quotient: &mut Self) {
-                    let dividend = ((dividend_high.value as Self::DoubleDigit) << Self::DIGITBITS) | (dividend_low.value as Self::DoubleDigit);
-                    let divisor = divisor.value as Self::DoubleDigit;
-                    quotient.value = (dividend / divisor) as Self::Digit;
-                }
-
-                fn value(&self) -> Self::Digit {
-                    self.value
-                }
-            }
-
-            converters!($bits);
-            comparisons!($bits);
-            arithmetics!($bits);
-
-            impl Arithmetic<[<Digit $bits>], [<Digit $bits>]> for [<Digit $bits>] {}
-
-            impl Display for [<Digit $bits>] {
-                fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-                    write!(f, "{}", self.value)
-                }
-            }
-        }
-    };
-}
-
-macro_rules! converters {
-    ($digit_bits: expr, $native: expr) => {
-        paste!{
-            impl From<$native> for [<Digit $digit_bits>] {
-                fn from(x: $native) -> [<Digit $digit_bits>] {
-                    [<Digit $digit_bits>] {
-                        value: x as [<u $digit_bits>]
-                    }
-                }
-            }
             
-            impl From<[<Digit $digit_bits>]> for $native {
-                fn from(x: [<Digit $digit_bits>]) -> $native {
-                    x.value as $native
+                // these combined calls evaluate the result and overflow simultaneously, storing the results in the respective mutable values
+                fn combined_add(x: Self, y: Self, result: &mut Self, carry: &mut Self) {
+                    let sum = (x as u16) + (y as u16);
+                    *result = sum as Self;
+                    *carry = (sum >> 8) as Self;
                 }
-            }
+                fn combined_mul(x: Self, y: Self, result: &mut Self, carry: &mut Self) {
+                    let prod = (x as u16) * (y as u16);
+                    *result = prod as Self;
+                    * carry = (prod >> 8) as Self;
+                }
             
-            impl From<&[<Digit $digit_bits>]> for $native {
-                fn from(x: &[<Digit $digit_bits>]) -> $native {
-                    x.value as $native
+                fn neg(&self) -> Self {
+                    !self.wrapping_add(1)
                 }
-            }
-        }
-    };
-    ($digit_bits: expr) => {
-        paste! {
-            converters!($digit_bits, u8);
-            converters!($digit_bits, u16);
-            converters!($digit_bits, u32);
-            converters!($digit_bits, u64);
-            converters!($digit_bits, u128);
-            converters!($digit_bits, usize);
-        }
-    }
-}
-
-macro_rules! comparisons {
-    ($digit_bits: expr, $native: expr) => {
-        paste!{
-            impl PartialEq<$native> for [<Digit $digit_bits>] {
-                fn eq(&self, other: &$native) -> bool {
-                    *self == [<Digit $digit_bits>]::from(*other)
-                }
-            }
-            impl PartialOrd<$native> for [<Digit $digit_bits>] {
-                fn partial_cmp(&self, other: &$native) -> Option<Ordering> {
-                    self.value.partial_cmp(&(*other as [<u $digit_bits>]))
-                }
-            }
             
-        }
-    };
-    ($digit_bits: expr) => {
-        paste! {
-            comparisons!($digit_bits, u8);
-            comparisons!($digit_bits, u16);
-            comparisons!($digit_bits, u32);
-            comparisons!($digit_bits, u64);
-            comparisons!($digit_bits, u128);
-            comparisons!($digit_bits, usize);
-
-            impl PartialOrd for [<Digit $digit_bits>] {
-                fn partial_cmp(&self, other: &[<Digit $digit_bits>]) -> Option<Ordering> {
-                    self.value.partial_cmp(&other.value)
+                fn leading_zeros(&self) -> usize {
+                    <[<u $bits>]>::leading_zeros(*self) as usize
+                }
+            
+                fn from_u8(x: u8) -> Self {
+                    x as Self
+                }
+                fn from_u16(x: u16) -> Self {
+                    x as Self
+                }
+                fn from_u32(x: u32) -> Self {
+                    x as Self
+                }
+                fn from_u64(x: u64) -> Self {
+                    x as Self
+                }
+                fn from_u128(x: u128) -> Self {
+                    x as Self
+                }
+                fn from_usize(x: usize) -> Self {
+                    x as Self
+                }
+            
+                fn to_u8(&self) -> u8 {
+                    *self as u8
+                }
+                fn to_u16(&self) -> u16 {
+                    *self as u16
+                }
+                fn to_u32(&self) -> u32 {
+                    *self as u32
+                }
+                fn to_u64(&self) -> u64 {
+                    *self as u64
+                }
+                fn to_u128(&self) -> u128 {
+                    *self as u128
+                }
+                fn to_usize(&self) -> usize {
+                    *self as usize
                 }
             }
-        }
-    }
+        }                
+    };
 }
 
-macro_rules! arithmetics {
-    ($digit_bits: expr, $native: ty, $op: path, $op_fn_name: ident, $op_call_fn_name: ident, $op_assign: path, $op_assign_fn_name: ident) => {
-        paste! {
-            impl $op<&$native> for &[<Digit $digit_bits>] {
-                type Output = [<Digit $digit_bits>];
-                fn $op_fn_name(self, other: &$native) -> [<Digit $digit_bits>] {
-                    [<Digit $digit_bits>] {
-                        value: self.value.$op_call_fn_name(*other as [<u $digit_bits>])
-                    }
-                }
-            }
-
-            op_to_op_assign!(
-                $op, $op_fn_name,
-                $op_assign, $op_assign_fn_name,
-                [<Digit $digit_bits>], $native,
-                [<Digit $digit_bits>]
-            );
-        }
-    };
-    ($digit_bits: expr, $op: path, $op_fn_name: ident, $op_assign: path, $op_assign_fn_name: ident) => {
-        paste! {
-            impl $op<&[<Digit $digit_bits>]> for &[<Digit $digit_bits>] {
-                type Output = [<Digit $digit_bits>];
-                fn $op_fn_name(self, other: &[<Digit $digit_bits>]) -> [<Digit $digit_bits>] {
-                    [<Digit $digit_bits>] {
-                        value: self.value + <[<u $digit_bits>]>::from(other.value)
-                    }
-                }
-            }
-
-            op_to_op_assign!(
-                $op, $op_fn_name,
-                $op_assign, $op_assign_fn_name,
-                [<Digit $digit_bits>], [<Digit $digit_bits>],
-                [<Digit $digit_bits>]
-            );
-        }
-    };
-    ($digit_bits: expr, $native: expr) => {
-        paste!{
-            arithmetics!($digit_bits, $native, Add, add, wrapping_add, AddAssign, add_assign);
-            arithmetics!($digit_bits, $native, BitAnd, bitand, bitand, BitAndAssign, bitand_assign);
-            arithmetics!($digit_bits, $native, BitOr, bitor, bitor, BitOrAssign, bitor_assign);
-            arithmetics!($digit_bits, $native, BitXor, bitxor, bitxor, BitXorAssign, bitxor_assign);
-            arithmetics!($digit_bits, $native, Mul, mul, wrapping_mul, MulAssign, mul_assign);
-            arithmetics!($digit_bits, $native, Shl, shl, shl, ShlAssign, shl_assign);
-            arithmetics!($digit_bits, $native, Shr, shr, shr, ShrAssign, shr_assign);
-            arithmetics!($digit_bits, $native, Sub, sub, wrapping_sub, SubAssign, sub_assign);
-            impl Arithmetic<$native, [<Digit $digit_bits>]> for [<Digit $digit_bits>] {}
-        }
-    };
-    ($digit_bits: expr) => {
-        paste! {
-            impl Not for [<Digit $digit_bits>] {
-                type Output = [<Digit $digit_bits>];
-                fn not(self) -> [<Digit $digit_bits>] {
-                    [<Digit $digit_bits>] {
-                        value: !self.value
-                    }
-                }
-            }
-            impl Neg for [<Digit $digit_bits>] {
-                type Output = [<Digit $digit_bits>];
-                fn neg(self) -> [<Digit $digit_bits>] {
-                    [<Digit $digit_bits>] {
-                        value: (-(self.value as [<i $digit_bits>])) as [<u $digit_bits>]
-                    }
-                }
-            }
-            arithmetics!($digit_bits, u8);
-            arithmetics!($digit_bits, u16);
-            arithmetics!($digit_bits, u32);
-            arithmetics!($digit_bits, u64);
-            arithmetics!($digit_bits, u128);
-            arithmetics!($digit_bits, usize);
-            arithmetics!($digit_bits, Add, add, AddAssign, add_assign);
-            arithmetics!($digit_bits, BitAnd, bitand, BitAndAssign, bitand_assign);
-            arithmetics!($digit_bits, BitOr, bitor, BitOrAssign, bitor_assign);
-            arithmetics!($digit_bits, BitXor, bitxor, BitXorAssign, bitxor_assign);
-            arithmetics!($digit_bits, Mul, mul, MulAssign, mul_assign);
-            arithmetics!($digit_bits, Shl, shl, ShlAssign, shl_assign);
-            arithmetics!($digit_bits, Shr, shr, ShrAssign, shr_assign);
-            arithmetics!($digit_bits, Sub, sub, SubAssign, sub_assign);
-        }
-    }
-}
-
-build_digit!(8, 16);
-build_digit!(16, 32);
-build_digit!(32, 64);
-build_digit!(64, 128);
+build_digit!(8);
+build_digit!(16);
+build_digit!(32);
+build_digit!(64);
+build_digit!(size);

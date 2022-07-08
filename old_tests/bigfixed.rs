@@ -1,4 +1,4 @@
-use bigfixed::{digit::*, index::*, cutoff::*, BigFixed, BigFixedVec};
+/*use bigfixed::{digit::*, index::*, cutoff::*, BigFixed, BigFixedVec};
 
 fn check<E>(x: Result<bool, E>, expected: bool, message: &str) {
     match x {
@@ -498,4 +498,4 @@ fn cutoff() {
     test_cutoff_floating_position!(two_nums, -5, Floor, D::ZERO, vec![D {value: 64}], 1, "11 . (-5) f");
     test_cutoff_floating_position!(two_nums, -5, Ceiling, D::ZERO, vec![D {value: 128}], 1, "11 . (-5) c");
     test_cutoff_floating_position!(two_nums, -5, Round, D::ZERO, vec![D {value: 128}], 1, "11 . (-5) r");
-}
+}*/
