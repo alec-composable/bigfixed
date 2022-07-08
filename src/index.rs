@@ -1,4 +1,18 @@
-// BigFixeds can be indexed by position (wrt Digit) or bit. If bit precision is not possible it may convert to the corresponding position index.
+/*
+    Index comes in two forms: position and bit. Positional depends on what digits are used while Bit does not.
+        ... 0000 0010 0110.1100 ... (Digit is the theoretical u4)
+    position   2    1    0   -1
+    bit        8  6 4  2 0-1-3
+
+    Index also handles conversions between usize and isize.
+
+    Possible sources of errors are integer overflows (very large Positions can't be converted to Bit, extremes for usize/isize conversion, etc)
+    and the completely avoidable UsedDigitTypeAsIndex error. For compiler reasons Index has a third type, DigitTypeInUse, which does not actually
+    serve as an index but instead defines which digit type is in use. Don't try using DigitTypeInUse as an index.
+
+    Some Index operations are overloaded to work with usize and isize as well. In these cases the number is compared to the value of the Index
+    regardless of whether it is Position or Bit. This means that equivalent Indexes (like Position(1) and Bit(8) for u8) can give different results.
+*/
 
 pub use std::{
     convert::{
@@ -27,7 +41,7 @@ pub use std::{
     }
 };
 
-use crate::{digit::*, macros::*};
+use crate::{digit::Digit, macros::*};
 
 #[derive(Clone, Copy, Eq, PartialEq, Debug)]
 pub enum IndexError {
@@ -57,6 +71,7 @@ pub use IndexError::*;
 pub enum Index<D: Digit> {
     Position(isize),
     Bit(isize),
+    // DigitTypeInUse is to alleviate the "unused parameter" error
     DigitTypeInUse(D)
 }
 
@@ -81,21 +96,13 @@ impl<D: Digit> Index<D> {
     }
 
     pub fn saturating_unsigned(x: isize) -> Result<usize, IndexError> {
-        Index::<D>::uncastsize(max(0, x))
+        Self::uncastsize(max(0, x))
     }
 
-    pub fn cast(&self) -> Result<Index<D>, IndexError> {
-        match self {
-            Position(x) => Ok(Bit(Index::<D>::position_to_bit(*x)?)),
-            Bit(x) => Ok(Bit(Index::<D>::bit_to_position(*x))),
-            DigitTypeInUse(_) => Err(UsedDigitTypeAsIndex)
-        }
-    }
-
-    pub fn cast_to_position(&self) -> Result<Index::<D>, IndexError> {
+    pub fn cast_to_position(&self) -> Result<Self, IndexError> {
         match self {
             Position(_) => Ok(*self),
-            Bit(x) => Ok(Position(Index::<D>::bit_to_position(*x))),
+            Bit(x) => Ok(Position(Self::bit_to_position(*x))),
             DigitTypeInUse(_) => Err(UsedDigitTypeAsIndex)
         }
     }
@@ -110,7 +117,7 @@ impl<D: Digit> Index<D> {
 
     pub fn cast_to_bit(&self) -> Result<Index<D>, IndexError> {
         match self {
-            Position(x) => Ok(Bit(Index::<D>::position_to_bit(*x)?)),
+            Position(x) => Ok(Bit(Self::position_to_bit(*x)?)),
             Bit(_) => Ok(*self),
             DigitTypeInUse(_) => Err(UsedDigitTypeAsIndex)
         }
@@ -133,7 +140,7 @@ impl<D: Digit> Index<D> {
     }
 
     pub fn unsigned_value(&self) -> Result<usize, IndexError> {
-        Index::<D>::saturating_unsigned(self.value()?)
+        Self::saturating_unsigned(self.value()?)
     }
 
     pub fn bit_value(&self) -> Result<isize, IndexError> {
@@ -153,7 +160,14 @@ impl<D: Digit> Index<D> {
     }
 }
 
-// format convention: (position), [bit], so 2[(0)] == 2, 2[(1)] == 0, 2[[0]] = 0, 2[[1]] == 1
+/*
+    format convention: (position), [bit], so 2[(0)] == 2, 2[(1)] == 0, 2[[0]] = 0, 2[[1]] == 1. Here 2 is ...00000010.00000...
+    ... 0000 0010.0000 ...
+    (0)      ||||.
+    (1) ||||     .
+    [0]         |.
+    [1]        | .
+*/
 
 macro_rules! formatter {
     ($fmt_type: ident, $key: expr) => {
@@ -184,35 +198,28 @@ formatter!(LowerHex, "{:x}");
 formatter!(UpperHex, "{:X}");
 formatter!(Binary, "{:b}");
 
-impl<D: Digit> From<&Index<D>> for isize {
-    fn from(a: &Index<D>) -> isize {
-        match a {
-            Position(x) => *x,
-            Bit(x) => *x,
-            DigitTypeInUse(_) => panic!("invalid index")
-        }
+// these converters do not add anything new but they make it easier to ignore details by just calling .into() in some cases 
+impl<D: Digit> From<&Index<D>> for Result<isize, IndexError> {
+    fn from(a: &Index<D>) -> Result<isize, IndexError> {
+        a.value()
     }
 }
 
-impl<D: Digit> From<Index<D>> for isize {
-    fn from(a: Index<D>) -> isize {
-        a.value().unwrap()
+impl<D: Digit> From<Index<D>> for Result<isize, IndexError> {
+    fn from(a: Index<D>) -> Result<isize, IndexError> {
+        a.value()
     }
 }
 
-impl<D: Digit> From<&Index<D>> for usize {
-    fn from(a: &Index<D>) -> usize {
-        match a.saturating_nonnegative().unwrap() {
-            Position(x) => x as usize,
-            Bit(x) => x as usize,
-            DigitTypeInUse(_) => panic!("unreachable")
-        }
+impl<D: Digit> From<&Index<D>> for Result<usize, IndexError> {
+    fn from(a: &Index<D>) -> Result<usize, IndexError> {
+        Index::<D>::saturating_unsigned(a.value()?)
     }
 }
 
-impl<D: Digit> From<Index<D>> for usize {
-    fn from(a: Index<D>) -> usize {
-        a.value().unwrap() as usize
+impl<D: Digit> From<Index<D>> for Result<usize, IndexError> {
+    fn from(a: Index<D>) -> Result<usize, IndexError> {
+        Index::<D>::saturating_unsigned(a.value()?)
     }
 }
 
@@ -592,10 +599,10 @@ impl<D: Digit> PartialEq for Index<D> {
             (Position(x), Position(y)) => x == y,
             (Bit(x), Bit(y)) => x == y,
             (Position(x), Bit(y)) => {
-                *x == Index::<D>::bit_to_position(*y)
+                *x == Self::bit_to_position(*y)
             },
             (Bit(x), Position(y)) => {
-                *y == Index::<D>::bit_to_position(*x)
+                *y == Self::bit_to_position(*x)
             },
             (DigitTypeInUse(x), DigitTypeInUse(y)) => x == y,
             _ => false // like NaN != NaN
@@ -615,11 +622,15 @@ impl<D: Digit> PartialEq<isize> for Index<D> {
 
 impl<D: Digit> PartialEq<usize> for Index<D> {
     fn eq(&self, other: &usize) -> bool {
-        let o = Index::<D>::castsize(*other).unwrap();
-        match self {
-            Position(x) => *x == o,
-            Bit(x) => *x == o,
-            DigitTypeInUse(_) => false // like NaN != NaN
+        match Self::castsize(*other) {
+            Ok(o) => {
+                match self {
+                    Position(x) => *x == o,
+                    Bit(x) => *x == o,
+                    DigitTypeInUse(_) => false // like NaN != NaN
+                }
+            },
+            Err(_) => return false
         }
     }
 }
@@ -630,32 +641,19 @@ impl<D: Digit> PartialOrd for Index<D> {
             (Position(x), Position(y)) => x.partial_cmp(y),
             (Bit(x), Bit(y)) => x.partial_cmp(y),
             (Position(x), Bit(y)) => {
-                match Index::<D>::position_to_bit(*x) {
+                match Self::position_to_bit(*x) {
                     Ok(z) => z.partial_cmp(y),
                     Err(_) => None
                 }
             },
             (Bit(x), Position(y)) => {
-                match Index::<D>::position_to_bit(*y) {
+                match Self::position_to_bit(*y) {
                     Ok(z) => x.partial_cmp(&z),
                     Err(_) => None
                 }
             }
-            (DigitTypeInUse(x), DigitTypeInUse(y)) => {
-                if x == y {
-                    Some(Ordering::Equal)
-                } else {
-                    None
-                }
-            },
             _ => None
         }
-    }
-}
-
-impl<D: Digit> Ord for Index<D> {
-    fn cmp(&self, other: &Index<D>) -> Ordering {
-        self.partial_cmp(other).unwrap()
     }
 }
 
@@ -671,16 +669,15 @@ impl<D: Digit> PartialOrd<isize> for Index<D> {
 
 impl<D: Digit> PartialOrd<usize> for Index<D> {
     fn partial_cmp(&self, other: &usize) -> Option<Ordering> {
-        let o = &Index::<D>::castsize(*other).unwrap();
-        match self {
-            Position(x) => x.partial_cmp(o),
-            Bit(x) => x.partial_cmp(o),
-            DigitTypeInUse(_) => None
+        match Self::castsize(*other) {
+            Ok(o) => {
+                match self {
+                    Position(x) => x.partial_cmp(&o),
+                    Bit(x) => x.partial_cmp(&o),
+                    DigitTypeInUse(_) => None
+                }
+            },
+            Err(_) => None
         }
     }
 }
-
-pub type Index8 = Index<Digit8>;
-pub type Index16 = Index<Digit16>;
-pub type Index32 = Index<Digit32>;
-pub type Index64 = Index<Digit64>;

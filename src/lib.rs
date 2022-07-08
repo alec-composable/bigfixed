@@ -3,8 +3,8 @@ pub mod macros;
 pub mod digit;
 pub use crate::digit::*;
 
-//pub mod index;
-//pub use crate::index::*;
+pub mod index;
+pub use crate::index::*;
 
 //pub mod cutoff;
 //pub use crate::cutoff::*;

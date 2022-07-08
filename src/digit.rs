@@ -2,6 +2,7 @@
     Digit is a generalizaiton of unsigned integer arithmetic. Basically everything that the u* natives have in common.
 
     Digit captures the properties of the numbers D = {0, 1, 2, ..., 2^n-1} with cyclic (wrapping) arithmetic.
+
     Equality and ordering respect the number representatives listed above: 0 through 2^n-1.
 
     Arithmetic and overflow are well-defined. If x,y are two Digits (elements of D) then
@@ -25,7 +26,7 @@
     Any Digit can be cast back and forth from all the native u* types. This is a direct bit cast just like
     how the u* types convert between each other using the 'as' keyword. Digits can be cast to other Digits too.
 
-    Because we can't implement existing traits on native u* types, some of the traits are instead hard coded.
+    Because we can't implement or modify existing traits on native u* types, some of the functionality is hard coded.
 
     The type u128 is not made into a Digit because there is no u256 for evaluating the full operations.
 */
@@ -34,35 +35,29 @@ use paste::paste;
 
 use core::{cmp::{PartialEq, Eq}, fmt,
     ops::{
-        Add, AddAssign,
         BitAnd, BitAndAssign,
         BitOr, BitOrAssign,
         BitXor, BitXorAssign,
         Div, DivAssign,
-        Mul, MulAssign,
         Not,
         Rem, RemAssign,
         Shl, ShlAssign,
         Shr, ShrAssign,
-        Sub, SubAssign
     }
 };
 
 pub trait Digit:
     Clone + Copy + PartialEq + Eq + PartialOrd
-    + Add<Self, Output = Self> + AddAssign<Self>
     + BitAnd<Self, Output = Self> + BitAndAssign<Self>
     + BitOr<Self, Output = Self> + BitOrAssign<Self>
     + BitXor<Self, Output = Self> + BitXorAssign<Self>
     + Div<Self, Output = Self> + DivAssign<Self>
-    + Mul<Self, Output = Self> + MulAssign<Self>
     + Not<Output = Self>
     + Rem<Self, Output = Self> + RemAssign<Self>
     + Shl<Self, Output = Self> + ShlAssign<Self>
     + Shr<Self, Output = Self> + ShrAssign<Self>
     + Shl<usize, Output = Self> + ShlAssign<usize>
     + Shr<usize, Output = Self> + ShrAssign<usize>
-    + Sub<Self, Output = Self> + SubAssign<Self>
     + fmt::Display + fmt::Debug + fmt::Octal + fmt::LowerHex + fmt::UpperHex + fmt::Binary
 {
     const DIGITBITS: usize;
@@ -130,6 +125,7 @@ macro_rules! build_digit {
                     *result = prod as Self;
                     * carry = (prod >> 8) as Self;
                 }
+
             
                 fn neg(&self) -> Self {
                     !self.wrapping_add(1)
