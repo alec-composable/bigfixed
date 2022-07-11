@@ -1,26 +1,35 @@
-use crate::{digit::*, Index, IndexError, cutoff::*};
+use crate::{digit::*, Index, IndexError/*, cutoff::**/};
 
-use core::{fmt, ops as coreops, ops::{Range}, iter::{repeat/*, Repeat, Chain, Take, Skip, Map*/}, cmp::{max, min}, convert::From, slice::{/*Iter,*/ IterMut}};
+use core::{
+    fmt,
+    convert
+};
 
 use std::error::Error;
 
-use num_traits::PrimInt;
-
-pub mod index_ops;
-pub mod convert;
-pub mod ops;
+pub mod position;
+pub mod range;
+pub mod rearrangements;
+pub mod ops {
+    pub mod index;
+}
+//pub mod convert;
+//pub mod ops;
 //pub mod ops_c;
 //pub mod exp;
+
 
 #[derive(Clone, Copy, Debug)]
 pub enum BigFixedError {
     // absorb IndexErrors
     IndexError(IndexError),
-    // not applicable to Vec-based BigFixed but applicable to hard coded versions
+    // ImproperlyPositioned is for when self.position is Index::Bit when Index::Position was expected
+    ImproperlyPositioned,
+    // not applicable to Vec-based BigFixed but potentially applicable to hard coded versions
     OutOfBoundsError
 }
 
-impl From<IndexError> for BigFixedError {
+impl convert::From<IndexError> for BigFixedError {
     fn from(x: IndexError) -> BigFixedError {
         BigFixedError::IndexError(x)
     }
@@ -34,257 +43,32 @@ impl fmt::Display for BigFixedError {
 
 impl Error for BigFixedError {}
 
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct BigFixedVec<D: Digit> {
+pub trait BigFixedErrorReferences: 'static {
+    const IMPROPERLYPOSITIONED_R: &'static Result<(), BigFixedError> = &Err(BigFixedError::ImproperlyPositioned);
+    const OUTOFBOUNDSERROR_R: &'static Result<(), BigFixedError> = &Err(BigFixedError::OutOfBoundsError);
+}
+
+impl BigFixedErrorReferences for BigFixedError {}
+
+pub trait DigitIterator<D: Digit>:
+    Iterator<Item = D>
+    + DoubleEndedIterator
+{}
+
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub struct BigFixed<D: Digit> {
     pub head: D,
     pub body: Vec<D>,
-    pub position: Index<D>,
-    // These are just here for ownership rules re ops::Index. They were not necessary when Digit was directly a u* but now they are apparently necessary.
-    pub zero_copy: D,
-    pub one_copy: D
+    pub position: Index<D>
 }
 
-pub trait BigFixed<D: Digit>:
-    Clone + PartialEq + Eq
-    + CutsOff<D, BigFixedError>
-    + coreops::Index<Index<D>> + coreops::IndexMut<Index<D>>
-    
-{
-    fn head(&self) -> D;
-
-    fn position(&self) -> Index<D>;
-
-    // fix position then remove redundant body data
-    fn format(&mut self) -> Result<(), BigFixedError>;
-
-    // If self.position is Index::Bit this will bit shift as necessary and turn it into Index::Position. Returns whether casting was necessary.
-    fn fix_position(&mut self) -> Result<bool, BigFixedError>;
-
-    fn construct(head: D, body: Vec<D>, position: Index<D>) -> Result<Self, BigFixedError>;
-
-    // Check if self.position is of type Index::Position
-    fn properly_positioned(&self) -> bool {
-        match self.position() {
-            Index::Position(_) => true,
-            Index::Bit(_) => false,
-            Index::DigitTypeInUse(_) => false
-        }
+impl<D: Digit> BigFixed<D> {
+    pub fn is_neg(&self) -> bool {
+        self.head != D::ZERO
     }
-
-    // Restructure if necessary so that all positions in low..high are valid. Breaks format so reformat afterwards. Returns whether restructuring was necessary.
-    fn ensure_valid_range(&mut self, low: Index<D>, high: Index<D>) -> Result<bool, BigFixedError>;
-
-    // same as ensure_valid_range where range is position..=position
-    fn ensure_valid_position(&mut self, position: Index<D>) -> Result<bool, BigFixedError> {
-        let p = position.cast_to_position()?;
-        self.ensure_valid_range(p, (p + Index::Position(1))?)
-    }
-
-    // ensure valid range then return a mutable iterator over the body
-    fn range_mut_iter(&mut self, low: Index<D>, high: Index<D>) -> Result<IterMut<D>, BigFixedError>;
-
-    fn is_neg(&self) -> Result<bool, BigFixedError>;
-
-    // the least position which is outside of the range contained in body
-    fn body_high(&self) -> Result<Index<D>, BigFixedError>;
-
-    fn valid_range(&self) -> Result<Range<Index<D>>, BigFixedError>;
-
-    fn int(&self) -> Result<Self, BigFixedError>;
-
-    fn frac(&self) -> Result<Self, BigFixedError>;
-
-    fn overwrite(&mut self, src: &Self);
-
-    fn clear(&mut self) {
-        self.overwrite(&Self::ZERO);
-    }
-
-    fn shift(self, shift: Index<D>) -> Result<Self, BigFixedError>;
-
-    // does not require proper formatting -- fully checks if self is zero
-    fn is_zero(&self) -> Result<bool, BigFixedError>;
-
-    fn full_eq(&self, other: &Self) -> Result<bool, BigFixedError>;
-
-    fn cutoff_index(&self, cutoff: Cutoff<D>) -> Result<Index<D>, BigFixedError> {
-        match (cutoff.fixed, cutoff.floating) {
-            (None, None) => Ok(self.position()), // no cutoff
-            (Some(fixed), None) => Ok(max(self.position(), fixed)),
-            (None, Some(floating)) => Ok(max(self.position(), (self.greatest_bit_position()? - max(floating, Index::Bit(0)))?)),
-            (Some(fixed), Some(floating)) => Ok(min(
-                max(self.position(), fixed),
-                max(self.position(), (self.greatest_bit_position()? - max(floating, Index::Bit(0)))?))
-            )
-        }
-    }
-
-    fn greatest_bit_position(&self) -> Result<Index<D>, BigFixedError>;
-
-    const ZERO: Self;
 }
 
-impl<D: Digit> BigFixed<D> for BigFixedVec<D> {
-    fn head(&self) -> D {
-        self.head
-    }
-
-    fn position(&self) -> Index<D> {
-        self.position
-    }
-    // fix position then remove redundant body data
-    fn format(&mut self) -> Result<(), BigFixedError> {
-        if self.head != D::ZERO {
-            self.head = D::ALLONES;
-        }
-        self.fix_position()?;
-        let mut high = self.body.len();
-        while high > 0 && self.body[high - 1] == self.head {
-            high -= 1;
-        }
-        self.body.truncate(high);
-        if self.body.len() > 0 {
-            let mut low = 0;
-            let len = self.body.len();
-            while low < len && self.body[low] == D::ZERO {
-                low += 1;
-            }
-            self.body.drain(0..low);
-            self.position += low;
-        }
-        // special case: zero
-        if self.head == D::ZERO && self.body.len() == 0 {
-            self.position = Index::Position(0);
-        }
-        Ok(())
-    }
-
-    // If self.position is Index::Bit this will bit shift as necessary and turn it into Index::Position. Returns whether casting was necessary.
-    fn fix_position(&mut self) -> Result<bool, BigFixedError> {
-        let changed;
-        match self.position {
-            Index::Position(_) => {
-                changed = false;
-            },
-            Index::Bit(b) => {
-                let diff = Index::<D>::uncastsize(b.rem_euclid(Index::<D>::castsize(D::DIGITBITS)?))?; 
-                let p = (b - Index::<D>::castsize(diff)?) / Index::<D>::castsize(D::DIGITBITS)?;
-                // b = p*DIGITBITS + diff and 0 <= diff < DIGITBITS
-                // shift left diff and change position to p
-                if diff > 0 {
-                    let opdiff = D::DIGITBITS - diff;
-                    let keepmask: D = D::ALLONES >> diff;
-                    let carrymask: D = !keepmask;
-                    let len = self.body.len();
-                    if len > 0 {
-                        let high_digit = ((self.head & keepmask) << diff) | ((self.body[len - 1] & carrymask) >> opdiff);
-                        if high_digit != self.head {
-                            self.body.push(high_digit);
-                        }
-                        for i in (1..len).rev() {
-                            self.body[i] = ((self.body[i] & keepmask) << diff) | ((self.body[i-1] & carrymask) >> opdiff);
-                        }
-                        self.body[0] = (self.body[0] & keepmask) << diff;
-                    } else if self.is_neg()? {
-                        self.body.push(((D::ALLONES & keepmask) << diff).into());
-                    }
-                }
-                self.position = Index::Position(p);
-                changed = true;
-            },
-            Index::DigitTypeInUse(_) => return Err(IndexError::UsedDigitTypeAsIndex.into())
-        }
-        Ok(changed)
-    }
-
-    fn construct(head: D, body: Vec<D>, position: Index<D>) -> Result<BigFixedVec<D>, BigFixedError> {
-        let mut returner = BigFixedVec {
-            head,
-            body,
-            position,
-            zero_copy: D::ZERO,
-            one_copy: D::ONE
-        };
-        returner.format()?;
-        Ok(returner)
-    }
-
-    // Restructure if necessary so that all positions in low..high are valid. Breaks format so reformat afterwards. Returns whether restructuring was necessary.
-    fn ensure_valid_range(&mut self, low: Index<D>, high: Index<D>) -> Result<bool, BigFixedError> {
-        self.fix_position()?;
-        if low >= high {
-            if low == high {
-                return Ok(false);
-            } else {
-                return self.ensure_valid_range(high, low);
-            }
-        }
-        let low = low.cast_to_position()?;
-        let high = high.cast_to_position()?;
-        let shifted_low = (low - self.position)?;
-        let shifted_high = (high - self.position)?;
-        let add_low = (-shifted_low)?.unsigned_value()?;
-        let add_high = (shifted_high - Index::<D>::castsize(self.body.len())?)?.unsigned_value()?;
-        self.position = min(low, self.position);
-        let reserve = add_low + add_high;
-        if reserve > 0 {
-            self.body.reserve(reserve);
-            if add_low > 0 {
-                self.body.splice(0..0, repeat(D::ZERO).take(add_low));
-            }
-            if add_high > 0 {
-                self.body.resize(self.body.len() + add_high, self.head);
-            }
-            Ok(true)
-        } else {
-            Ok(false)
-        }
-    }
-
-    // same as ensure_valid_range where range is position..=position
-    fn ensure_valid_position(&mut self, position: Index<D>) -> Result<bool, BigFixedError> {
-        let p = position.cast_to_position()?;
-        self.ensure_valid_range(p, (p + Index::Position(1))?)
-    }
-
-    fn range_mut_iter(&mut self, low: Index<D>, high: Index<D>) -> Result<IterMut<D>, BigFixedError> {
-        self.ensure_valid_range(low, high)?;
-        Ok(self.body.iter_mut())
-    }
-
-    /*fn range_iter(&self, low: Index<D>, high: Index<D>) -> Result<<BigFixedVec<D> as BigFixed<D>>::BodyIterType, BigFixedError> {
-        assert!(self.properly_positioned());
-        let body_high = self.body_high()?;
-        let low = low.cast_to_position()?;
-        let keep_low = min(body_high, max(self.position, low));
-        let keep_high = min(high, body_high);
-        let high = high.cast_to_position()?;
-        Ok(
-            repeat(0.into()).take((self.position - low)?.unsigned_value()?)
-            .chain(
-                self.body.iter().map(D::deref)
-                .skip((keep_low - self.position)?.unsigned_value()?)
-                .take((keep_high - keep_low)?.unsigned_value()?)
-            )
-            .chain(
-                repeat(self.head).take((high - body_high)?.unsigned_value()?)
-            )
-        )
-    }*/
-
-    fn is_neg(&self) -> Result<bool, BigFixedError> {
-        Ok(self.head != D::ZERO)
-    }
-
-    // the least position which is outside of the range contained in body
-    fn body_high(&self) -> Result<Index<D>, BigFixedError> {
-        Ok((self.position + self.body.len())?)
-    }
-
-    fn valid_range(&self) -> Result<Range<Index<D>>, BigFixedError> {
-        Ok(self.position..self.body_high()?)
-    }
-
+/*impl<D: Digit> BigFixed<D> {
     fn int(&self) -> Result<BigFixedVec<D>, BigFixedError> {
         BigFixedVec::construct(
             self.head,
@@ -494,5 +278,15 @@ impl<D: Digit> fmt::Binary for BigFixedVec<D> {
             }
         }
         Ok(())
+    }
+}*/
+
+impl<D: Digit> fmt::Binary for BigFixed<D> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "head: {:b}", self.head).ok();
+        for x in self.body.iter().rev() {
+            write!(f, " {:b}", x).ok();
+        }
+        write!(f, " position {}", self.position)
     }
 }

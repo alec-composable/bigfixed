@@ -47,7 +47,8 @@ use core::{cmp::{PartialEq, Eq}, fmt,
 };
 
 pub trait Digit:
-    Clone + Copy + PartialEq + Eq + PartialOrd
+    'static
+    + Clone + Copy + PartialEq + Eq + PartialOrd
     + BitAnd<Self, Output = Self> + BitAndAssign<Self>
     + BitOr<Self, Output = Self> + BitOrAssign<Self>
     + BitXor<Self, Output = Self> + BitXorAssign<Self>
@@ -67,6 +68,12 @@ pub trait Digit:
     const ONE: Self;
     const GREATESTBIT: Self;
     const ALLONES: Self;
+
+    // these were introduced so that indexing the head or tail can return a reference (x[-1] == &D::ZERO == D::ZEROR):
+    const ZERO_R: &'static Self;
+    const ONE_R: &'static Self;
+    const GREATESTBIT_R: &'static Self;
+    const ALLONES_R: &'static Self;
 
     fn from_le_bytes(bytes: &[u8]) -> Self;
     fn to_le_bytes(&self) -> Vec<u8>;
@@ -104,6 +111,11 @@ macro_rules! build_digit {
                 const ONE: [<u $bits>] = 1;
                 const GREATESTBIT: [<u $bits>] = !((!0) >> 1);
                 const ALLONES: [<u $bits>] = !0;
+
+                const ZERO_R: &'static [<u $bits>] = &Self::ZERO;
+                const ONE_R: &'static [<u $bits>] = &Self::ONE;
+                const GREATESTBIT_R: &'static [<u $bits>] = &Self::GREATESTBIT;
+                const ALLONES_R: &'static [<u $bits>] = &Self::ALLONES;
             
                 fn from_le_bytes(bytes: &[u8]) -> Self {
                     let mut right_bytes = [0; Self::DIGITBYTES];

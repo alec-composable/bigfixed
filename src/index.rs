@@ -30,6 +30,7 @@ pub use std::{
     cmp::{
         PartialEq,
         PartialOrd,
+        Ord,
         Ordering,
         max
     },
@@ -156,6 +157,13 @@ impl<D: Digit> Index<D> {
             Position(x) => Ok(Position(x.checked_neg().ok_or(IntegerCastOverflow)?)),
             Bit(x) => Ok(Bit(x.checked_neg().ok_or(IntegerCastOverflow)?)),
             DigitTypeInUse(_) => Err(UsedDigitTypeAsIndex)
+        }
+    }
+
+    pub fn range(low: Index<D>, high: Index<D>) -> Range<Index<D>> {
+        Range {
+            start: low,
+            end: high
         }
     }
 }
@@ -678,6 +686,21 @@ impl<D: Digit> PartialOrd<usize> for Index<D> {
                 }
             },
             Err(_) => None
+        }
+    }
+}
+
+/*
+    While PartialOrd is the correct trait for Index, we implement Ord so we can take max and min of them.
+    Unorderable pairs arise only when one of the values is broken (too large or DigitTypeInUse), in which case
+    we make the arbitrary choice to say they are equal to everything to get Ord to compile.
+    The other choice is to panic on invalid entries but that seems extreme.
+*/
+impl<D: Digit> Ord for Index<D> {
+    fn cmp(&self, other: &Self) -> Ordering {
+        match self.partial_cmp(other) {
+            Some(r) => r,
+            None => Ordering::Equal
         }
     }
 }
