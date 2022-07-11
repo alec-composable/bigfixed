@@ -28,7 +28,7 @@ use core::{
 
 impl<D: Digit> BigFixed<D> {
     // the least position which is outside of the range contained in body
-    fn body_high(&self) -> Result<Index<D>, BigFixedError> {
+    pub fn body_high(&self) -> Result<Index<D>, BigFixedError> {
         Ok((self.position + Index::Position(Index::<D>::castsize(self.body.len())?))?)
     }
 
@@ -104,5 +104,17 @@ impl<D: Digit> BigFixed<D> {
 
     pub fn valid_range(&self) -> Result<Range<Index<D>>, BigFixedError> {
         Ok(self.position..self.body_high()?)
+    }
+
+    pub fn shift(mut self, shift: Index<D>) -> Result<BigFixed<D>, BigFixedError> {
+        self.position += shift;
+        self.format()?;
+        Ok(self)
+    }
+
+    pub fn overwrite(&mut self, src: &BigFixed<D>) {
+        self.head = src.head;
+        self.body.splice(0..self.body.len(), src.body.iter().map(|x| *x));
+        self.position = src.position;
     }
 }

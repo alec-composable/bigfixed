@@ -9,7 +9,6 @@ use std::error::Error;
 
 pub mod position;
 pub mod range;
-pub mod rearrangements;
 pub mod ops {
     pub mod index;
 }

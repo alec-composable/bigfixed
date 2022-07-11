@@ -102,7 +102,7 @@ pub trait Digit:
 }
 
 macro_rules! build_digit {
-    ($bits: expr) => {
+    ($bits: expr, $double_bits: expr) => {
         paste! {
             impl Digit for [<u $bits>] {
                 const DIGITBITS: usize = [<u $bits>]::BITS as usize;
@@ -128,12 +128,12 @@ macro_rules! build_digit {
             
                 // these combined calls evaluate the result and overflow simultaneously, storing the results in the respective mutable values
                 fn combined_add(x: Self, y: Self, result: &mut Self, carry: &mut Self) {
-                    let sum = (x as u16) + (y as u16);
+                    let sum = (x as [<u $double_bits>]) + (y as [<u $double_bits>]);
                     *result = sum as Self;
                     *carry = (sum >> 8) as Self;
                 }
                 fn combined_mul(x: Self, y: Self, result: &mut Self, carry: &mut Self) {
-                    let prod = (x as u16) * (y as u16);
+                    let prod = (x as [<u $double_bits>]) * (y as [<u $double_bits>]);
                     *result = prod as Self;
                     * carry = (prod >> 8) as Self;
                 }
@@ -189,8 +189,7 @@ macro_rules! build_digit {
     };
 }
 
-build_digit!(8);
-build_digit!(16);
-build_digit!(32);
-build_digit!(64);
-build_digit!(size);
+build_digit!(8, 16);
+build_digit!(16, 32);
+build_digit!(32, 64);
+build_digit!(64, 128);
