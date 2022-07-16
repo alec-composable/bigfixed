@@ -47,12 +47,34 @@ impl<D: Digit> BigFixed<D> {
         }
     }
 
-    pub fn properly_positioned_result(&self) -> Result<(), BigFixedError> {
+    pub fn properly_positioned_screen(&self) -> Result<(), BigFixedError> {
         if self.properly_positioned() {
             Ok(())
         } else {
             Err(BigFixedError::ImproperlyPositioned)
         }
+    }
+
+    pub fn greatest_bit_position(&self) -> Result<Index<D>, BigFixedError> {
+        // zero is special, just return 0
+        if self.is_zero()? {
+            return Ok(Index::Position(0));
+        }
+        let position = self.body_high()?;
+        let max_element = *self.index_result((position - Index::Position(1))?)?;
+        let coefficient: D = max_element ^ self.head; // greatest bit which differs from head is greatest bit here
+        Ok(
+            Index::Bit(
+                position.bit_value()? - (
+                    Index::<D>::castsize(coefficient.leading_zeros())? + 1
+                )
+            )
+        )
+    }
+
+    // the least position which is outside of the range contained in body
+    pub fn body_high(&self) -> Result<Index<D>, BigFixedError> {
+        Ok((self.position + Index::Position(Index::<D>::castsize(self.body.len())?))?)
     }
 
     pub fn trim_head(&mut self) {

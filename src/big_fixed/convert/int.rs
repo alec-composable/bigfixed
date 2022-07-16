@@ -1,4 +1,11 @@
-use crate::{digit::*, Index, Cutoff, cutoff::*, BigFixed, BigFixedVec, BigFixedError};
+use crate::{
+    Digit,
+    Index,
+    Cutoff,
+    CutsOff,
+    BigFixed,
+    BigFixedError
+};
 
 use std::{convert::{From}, cmp::{max}};
 

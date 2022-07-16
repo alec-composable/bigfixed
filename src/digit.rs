@@ -130,12 +130,12 @@ macro_rules! build_digit {
                 fn combined_add(x: Self, y: Self, result: &mut Self, carry: &mut Self) {
                     let sum = (x as [<u $double_bits>]) + (y as [<u $double_bits>]);
                     *result = sum as Self;
-                    *carry = (sum >> 8) as Self;
+                    *carry = (sum >> $bits) as Self;
                 }
                 fn combined_mul(x: Self, y: Self, result: &mut Self, carry: &mut Self) {
                     let prod = (x as [<u $double_bits>]) * (y as [<u $double_bits>]);
                     *result = prod as Self;
-                    * carry = (prod >> 8) as Self;
+                    * carry = (prod >> $bits) as Self;
                 }
 
             

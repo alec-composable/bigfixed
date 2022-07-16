@@ -27,11 +27,6 @@ use core::{
 };
 
 impl<D: Digit> BigFixed<D> {
-    // the least position which is outside of the range contained in body
-    pub fn body_high(&self) -> Result<Index<D>, BigFixedError> {
-        Ok((self.position + Index::Position(Index::<D>::castsize(self.body.len())?))?)
-    }
-
     // Restructure if necessary so that all positions in low..high are valid. Breaks format so reformat afterwards. Returns whether restructuring was necessary.
     pub fn ensure_valid_range(&mut self, low: Index<D>, high: Index<D>) -> Result<bool, BigFixedError> {
         if low >= high {
@@ -83,7 +78,7 @@ impl<D: Digit> BigFixed<D> {
                 Take<Skip<Iter<D>>>
             >, Take<Repeat<&D>>
         > , BigFixedError> {
-        self.properly_positioned_result()?;
+        self.properly_positioned_screen()?;
         let body_high = self.body_high()?;
         let low = low.cast_to_position()?;
         let keep_low = min(body_high, max(self.position, low));
@@ -116,5 +111,24 @@ impl<D: Digit> BigFixed<D> {
         self.head = src.head;
         self.body.splice(0..self.body.len(), src.body.iter().map(|x| *x));
         self.position = src.position;
+    }
+
+    pub fn full_eq(&self, other: &BigFixed<D>) -> Result<bool, BigFixedError> {
+        let min = min(
+            self.position.cast_to_position()?,
+            other.position.cast_to_position()?
+        );
+        let max = max(
+            self.body_high()?,
+            other.body_high()?
+        );
+        let me = self.range_iter(min, max)?;
+        let you = other.range_iter(min, max)?;
+        for (x, y) in me.zip(you) {
+            if *x != *y {
+                return Ok(false);
+            }
+        }
+        Ok(true)
     }
 }

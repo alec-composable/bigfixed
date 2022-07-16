@@ -2,17 +2,21 @@ use crate::{digit::*, Index, IndexError/*, cutoff::**/};
 
 use core::{
     fmt,
-    convert
+    convert as cnvt
 };
 
 use std::error::Error;
 
 pub mod position;
 pub mod range;
+pub mod cutoff;
 pub mod ops {
     pub mod index;
+    pub mod add_digit;
 }
-//pub mod convert;
+pub mod convert {
+//    pub mod int;
+}
 //pub mod ops;
 //pub mod ops_c;
 //pub mod exp;
@@ -28,7 +32,11 @@ pub enum BigFixedError {
     OutOfBoundsError
 }
 
-impl convert::From<IndexError> for BigFixedError {
+impl BigFixedError {
+    pub const UNINDEXED_INDEX: BigFixedError = BigFixedError::IndexError(IndexError::UsedDigitTypeAsIndex);
+}
+
+impl cnvt::From<IndexError> for BigFixedError {
     fn from(x: IndexError) -> BigFixedError {
         BigFixedError::IndexError(x)
     }
@@ -65,6 +73,17 @@ impl<D: Digit> BigFixed<D> {
     pub fn is_neg(&self) -> bool {
         self.head != D::ZERO
     }
+
+    // does not require proper formatting -- fully checks if self is zero
+    pub fn is_zero(&self) -> Result<bool, BigFixedError> {
+        Ok(self.head == D::ZERO && self.body.iter().all(|&x| x == D::ZERO))
+    }
+
+    pub const ZERO: Self = BigFixed {
+        head: D::ZERO,
+        body: vec![],
+        position: Index::Position(0)
+    };
 }
 
 /*impl<D: Digit> BigFixed<D> {
@@ -84,40 +103,6 @@ impl<D: Digit> BigFixed<D> {
         )
     }
 
-    fn overwrite(&mut self, src: &BigFixedVec<D>) {
-        self.head = src.head();
-        self.body.splice(0..self.body.len(), src.body.iter().map(|x| *x));
-        self.position = src.position;
-    }
-
-    fn shift(mut self, shift: Index<D>) -> Result<BigFixedVec<D>, BigFixedError> {
-        self.position += shift;
-        self.format()?;
-        Ok(self)
-    }
-
-    // does not require proper formatting -- fully checks if self is zero
-    fn is_zero(&self) -> Result<bool, BigFixedError> {
-        Ok(self.head == D::ZERO && self.body.iter().all(|&x| x == D::ZERO))
-    }
-
-    fn full_eq(&self, other: &BigFixedVec<D>) -> Result<bool, BigFixedError> {
-        for i in min(
-            self.position.cast_to_position()?,
-            other.position.cast_to_position()?
-        ).value()?..(
-            max(
-                self.body_high()?,
-                other.body_high()?
-            ) + Index::Position(1)
-        )?.value()? {
-            if self[Index::Position(i)] != other[Index::Position(i)] {
-                return Ok(false);
-            }
-        };
-        Ok(true)
-    }
-
     fn cutoff_index(&self, cutoff: Cutoff<D>) -> Result<Index<D>, BigFixedError> {
         match (cutoff.fixed, cutoff.floating) {
             (None, None) => Ok(self.position), // no cutoff
@@ -129,24 +114,6 @@ impl<D: Digit> BigFixed<D> {
             )
         }
     }
-
-    fn greatest_bit_position(&self) -> Result<Index<D>, BigFixedError> {
-        // zero is special, just return 0
-        if self.is_zero()? {
-            return Ok(Index::Position(0));
-        }
-        let position = self.body_high()?;
-        let coefficient: D = self[(position - 1isize)?] ^ self.head; // greatest bit which differs from head is greatest bit here
-        Ok(Index::Bit(position.bit_value()? - Index::<D>::castsize(coefficient.value().leading_zeros() as usize + 1)?))
-    }
-
-    const ZERO: BigFixedVec<D> = BigFixedVec {
-        head: D::ZERO,
-        body: vec![],
-        position: Index::Position(0),
-        zero_copy: D::ZERO,
-        one_copy: D::ONE
-    };
 }
 
 impl<D: Digit> CutsOff<D, BigFixedError> for BigFixedVec<D> {

@@ -24,7 +24,7 @@ use std::{
 
 impl<D: Digit> BigFixed<D> {
     pub fn index_result(&self, position: Indx<D>) -> Result<&D, BigFixedError> {
-        self.properly_positioned_result()?;
+        self.properly_positioned_screen()?;
         match position {
             Indx::Position(_) => {
                 let shifted = (position - self.position)?;
