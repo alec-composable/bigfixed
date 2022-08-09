@@ -1,8 +1,20 @@
 use crate::{
     Digit,
     Index,
+    Cutoff,
+    CutsOff,
+    Rounding,
     BigFixed,
     BigFixedError
+};
+
+use core::{
+    //ops::{
+    //    Add, AddAssign
+    //},
+    cmp::{
+        max, min
+    }
 };
 
 impl<D: Digit> BigFixed<D> {
@@ -107,21 +119,70 @@ impl<D: Digit> BigFixed<D> {
     // mutate in place to negative
     pub fn negate(&mut self) -> Result<(), BigFixedError> {
         self.head = !self.head;
-        for i in 0..self.body.len() {
-            self.body[i] = !self.body[i];
-        }
+        self.body.iter_mut().for_each(|x| *x = !*x);
         self.add_digit(D::ONE, self.position)?;
         self.format()?;
         Ok(())
     }
 
     pub fn abs(&self) -> Result<BigFixed<D>, BigFixedError> {
+        let mut abs = self.clone();
         if self.is_neg() {
-            let mut copy = self.clone();
-            copy.negate()?;
-            Ok(copy)
-        } else {
-            Ok(self.clone())
+            abs.negate()?;
         }
+        Ok(abs)
     }
+
+    pub fn add_assign_res(&mut self, other: &BigFixed<D>, cutoff: Cutoff<D>) -> Result<(), BigFixedError> {
+        self.fix_position()?;
+        other.properly_positioned_screen()?;
+        let low = min(self.position, other.position);
+        let high = max(self.body_high()?, other.body_high()?);
+        self.ensure_valid_range(low, high)?;
+        let mut read_other = other.range_iter_rev(low, high)?;
+        match cutoff.round {
+            Rounding::Floor | Rounding::Round => {
+                let mut on_position = high;
+                loop {
+                    on_position = (on_position - Index::Position(1))?;
+                    match read_other.next() {
+                        Some(&d) => {
+                            self.add_digit_drop_overflow(d, on_position)?;
+                        },
+                        None => {
+                            break;
+                        }
+                    }
+                }
+            },
+            Rounding::Ceiling => {
+                panic!("not supported yet");
+            },
+            Rounding::TowardsZero | Rounding::AwayFromZero => {
+                panic!("not supported yet");
+                // have to estimate whether result is positive or negative
+            }
+        }
+        self.cutoff(cutoff)?;
+        Ok(())
+    }
+
+    /*pub fn add_assign(&mut self, other: &BigFixedVec<D>) -> Result<(), BigFixedError> {
+        self.fix_position()?;
+        let position = min(self.position, other.position);
+        // one more for overflow
+        let high = (max(self.body_high()?, other.body_high()?) + Index::Position(1))?;
+        self.ensure_valid_range(position, high)?;
+        let other_low = other.position.cast_to_position()?;
+        for i in other_low.value()?..high.value()? {
+            let p = Index::Position(i);
+            self.add_digit_drop_overflow(other[p], p)?;
+        }
+        self.head = if self[(high - Index::Position(1))?] >= D::GREATESTBIT {
+            D::ALLONES
+        } else {
+            D::ZERO
+        };
+        self.format()
+    }*/
 }

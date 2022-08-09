@@ -16,25 +16,6 @@ use std::{
 };
 
 impl<D: Digit> BigFixedVec<D> {
-    pub fn add_assign(&mut self, other: &BigFixedVec<D>) -> Result<(), BigFixedError> {
-        self.fix_position()?;
-        let position = min(self.position, other.position);
-        // one more for overflow
-        let high = (max(self.body_high()?, other.body_high()?) + Index::Position(1))?;
-        self.ensure_valid_range(position, high)?;
-        let other_low = other.position.cast_to_position()?;
-        for i in other_low.value()?..high.value()? {
-            let p = Index::Position(i);
-            self.add_digit_drop_overflow(other[p], p)?;
-        }
-        self.head = if self[(high - Index::Position(1))?] >= D::GREATESTBIT {
-            D::ALLONES
-        } else {
-            D::ZERO
-        };
-        self.format()
-    }
-
     pub fn bitand_assign(&mut self, other: &BigFixedVec<D>) -> Result<(), BigFixedError> {
         self.fix_position()?;
         // align self valid range

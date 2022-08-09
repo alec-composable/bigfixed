@@ -15,7 +15,8 @@ use core::{
         Take,
         Repeat,
         Chain,
-        Skip
+        Skip,
+        Rev
     },
     slice::{
         IterMut,
@@ -93,6 +94,34 @@ impl<D: Digit> BigFixed<D> {
             )
             .chain(
                 repeat(&self.head).take((high - body_high)?.unsigned_value()?)
+            )
+        )
+    }
+
+    pub fn range_iter_rev(&self, low: Index<D>, high: Index<D>) -> Result<
+        Chain<
+            Chain<
+                Take<Repeat<&D>>,
+                Rev<Take<Skip<Iter<D>>>>
+            >,
+            Take<Repeat<&D>>
+        >, BigFixedError> {
+        self.properly_positioned_screen()?;
+        let body_high = self.body_high()?;
+        let low = low.cast_to_position()?;
+        let keep_low = min(body_high, max(self.position, low));
+        let keep_high = min(high, body_high);
+        let high = high.cast_to_position()?;
+        Ok(
+            repeat(&self.head).take((high - body_high)?.unsigned_value()?)
+            .chain(
+                self.body.iter()
+                .skip((keep_low - self.position)?.unsigned_value()?)
+                .take((keep_high - keep_low)?.unsigned_value()?)
+                .rev()
+            )
+            .chain(
+                repeat(D::ZERO_R).take((self.position - low)?.unsigned_value()?)
             )
         )
     }

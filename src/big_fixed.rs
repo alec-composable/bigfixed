@@ -12,7 +12,7 @@ pub mod range;
 pub mod cutoff;
 pub mod ops {
     pub mod index;
-    pub mod add_digit;
+    pub mod addition;
 }
 pub mod convert {
 //    pub mod int;
@@ -33,6 +33,7 @@ pub enum BigFixedError {
 }
 
 impl BigFixedError {
+    // Index::DigitTypeInUse should never be used as an index. This error is for if it is.
     pub const UNINDEXED_INDEX: BigFixedError = BigFixedError::IndexError(IndexError::UsedDigitTypeAsIndex);
 }
 
@@ -101,18 +102,6 @@ impl<D: Digit> BigFixed<D> {
             self.body[0..(-self.position)?.unsigned_value()?].to_vec(),
             self.position // if position is positive then body must be empty and format() resets position to 0
         )
-    }
-
-    fn cutoff_index(&self, cutoff: Cutoff<D>) -> Result<Index<D>, BigFixedError> {
-        match (cutoff.fixed, cutoff.floating) {
-            (None, None) => Ok(self.position), // no cutoff
-            (Some(fixed), None) => Ok(max(self.position, fixed)),
-            (None, Some(floating)) => Ok(max(self.position, (self.greatest_bit_position()? - max(floating, Index::Bit(0)))?)),
-            (Some(fixed), Some(floating)) => Ok(min(
-                max(self.position, fixed),
-                max(self.position, (self.greatest_bit_position()? - max(floating, Index::Bit(0)))?))
-            )
-        }
     }
 }
 
@@ -249,9 +238,11 @@ impl<D: Digit> fmt::Binary for BigFixedVec<D> {
 
 impl<D: Digit> fmt::Binary for BigFixed<D> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "head: {:b}", self.head).ok();
+        write!(f, "... ").ok();
+        self.head.fmt_binary(f).ok();
         for x in self.body.iter().rev() {
-            write!(f, " {:b}", x).ok();
+            write!(f, " ").ok();
+            x.fmt_binary(f).ok();
         }
         write!(f, " position {}", self.position)
     }

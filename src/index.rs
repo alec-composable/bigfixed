@@ -694,7 +694,7 @@ impl<D: Digit> PartialOrd<usize> for Index<D> {
     While PartialOrd is the correct trait for Index, we implement Ord so we can take max and min of them.
     Unorderable pairs arise only when one of the values is broken (too large or DigitTypeInUse), in which case
     we make the arbitrary choice to say they are equal to everything to get Ord to compile.
-    The other choice is to panic on invalid entries but that seems extreme.
+    The other choice is to panic on invalid entries.
 */
 impl<D: Digit> Ord for Index<D> {
     fn cmp(&self, other: &Self) -> Ordering {

@@ -1,3 +1,15 @@
+/*
+    Cutting off is a two step process. First the cutoff index is determined. The cutoff index does not depend on sign or rounding,
+    only on positional data. Second is to decide whether to round up or down. This depends on sign, the cutoff rounding technique, and
+    the BigFixed itself.
+
+    Once these two things have been determined, all data below the cutoff index is discarded (set to 0). If it rounds up then 1 is added
+    in at the cutoff index.
+
+    Cutoffs come in two kinds and how to compute the cutoff index is different for each. For fixed cutoffs the cutoff index is just the
+    given fixed position. For floating cutoffs the cutoff index is the greatest bit position minus the given floating position.
+*/
+
 use crate::{
     Digit,
     Index,
@@ -16,15 +28,71 @@ use core::{
 };
 
 impl<D: Digit> BigFixed<D> {
+    // find where the cutoff should occur
     pub fn cutoff_index(&self, cutoff: Cutoff<D>) -> Result<Index<D>, BigFixedError> {
         match (cutoff.fixed, cutoff.floating) {
             (None, None) => Ok(self.position), // no cutoff
-            (Some(fixed), None) => Ok(max(self.position, fixed)),
-            (None, Some(floating)) => Ok(max(self.position, (self.greatest_bit_position()? - max(floating, Index::Bit(0)))?)),
+            (Some(fixed), None) => Ok(fixed),
+            _ => self.cutoff_index_gb(cutoff, self.greatest_bit_position()?)
+        }
+    }
+
+    // for shortcutting by not recomputing the greatest bit position
+    pub(crate) fn cutoff_index_gb(&self, cutoff: Cutoff<D>, greatest_bit_position: Index<D>) -> Result<Index<D>, BigFixedError> {
+        match (cutoff.fixed, cutoff.floating) {
+            (None, None) => Ok(self.position), // no cutoff
+            (Some(fixed), None) => Ok(fixed),
+            (None, Some(floating)) => Ok((greatest_bit_position - floating)?),
             (Some(fixed), Some(floating)) => Ok(min(
                 max(self.position, fixed),
-                max(self.position, (self.greatest_bit_position()? - max(floating, Index::Bit(0)))?))
+                max(self.position, (greatest_bit_position - floating)?))
             )
+        }
+    }
+
+    // rounding down means setting all data below the cutoff index to 0
+    // rounding up means adding 1 to the cutoff index then setting all lower data to 0
+    pub fn rounds_down(&self, cutoff: Cutoff<D>) -> Result<bool, BigFixedError> {
+        return self.rounds_down_full(cutoff.round, self.cutoff_index(cutoff)?);
+    }
+
+    pub fn rounds_down_full(&self, cutoff_round: Rounding, cutoff_index: Index<D>) -> Result<bool, BigFixedError> {
+        match cutoff_index {
+            Index::Bit(_b) => {
+                return Err(BigFixedError::ImproperlyPositioned);
+            },
+            Index::Position(_p) => {
+                match cutoff_round {
+                    Rounding::Floor => Ok(true),
+                    Rounding::Ceiling => {
+                        Ok(
+                            self.body[
+                                0 .. min(self.body.len(), (cutoff_index - self.position)?.unsigned_value()?)
+                            ].iter().all(
+                                |&x| x == D::ZERO
+                            )
+                        )
+                    },
+                    Rounding::Round => Ok(
+                        *self.index_result((cutoff_index - Index::Position(1))?)? < D::GREATESTBIT
+                    ),
+                    Rounding::TowardsZero => {
+                        if self.is_neg() {
+                            return self.rounds_down_full(Rounding::Ceiling, cutoff_index);
+                        } else {
+                            return self.rounds_down_full(Rounding::Floor, cutoff_index);
+                        }
+                    },
+                    Rounding::AwayFromZero => {
+                        if self.is_neg() {
+                            return self.rounds_down_full(Rounding::Floor, cutoff_index);
+                        } else {
+                            return self.rounds_down_full(Rounding::Ceiling, cutoff_index);
+                        }
+                    }
+                }
+            },
+            Index::DigitTypeInUse(_) => Err(BigFixedError::UNINDEXED_INDEX)
         }
     }
 }
@@ -35,66 +103,7 @@ impl<D: Digit> CutsOff<D, BigFixedError> for BigFixed<D> {
         let cutoff_index = self.cutoff_index(cutoff)?;
         let as_bit = cutoff_index.cast_to_bit()?;
         let as_pos = cutoff_index.cast_to_position()?;
-        let increment = match cutoff.round {
-            Rounding::Floor => false,
-            Rounding::Round => self[(as_bit - Index::Bit(1))?] > D::ZERO,
-            Rounding::Ceiling => {
-                if self.position >= as_bit {
-                    false
-                } else {
-                    let mut has_value = false;
-                    for p in self.position.value()?..as_pos.value()? {
-                        if self[Index::Position(p)] != D::ZERO {
-                            has_value = true;
-                            break;
-                        }
-                    }
-                    let diff = as_bit.bit_position_excess()?;
-                    if diff > 0 {
-                        has_value = has_value || (self[as_pos] & (D::ALLONES >> (D::DIGITBITS as isize - diff as isize) as usize) > D::ZERO);
-                    }
-                    has_value
-                }
-            },
-            Rounding::TowardsZero => {
-                if self.is_neg() {
-                    return self.cutoff(
-                        Cutoff {
-                            fixed: cutoff.fixed,
-                            floating: cutoff.floating,
-                            round: Rounding::Floor
-                        }
-                    )
-                } else {
-                    return self.cutoff(
-                        Cutoff {
-                            fixed: cutoff.fixed,
-                            floating: cutoff.floating,
-                            round: Rounding::Ceiling
-                        }
-                    )
-                }
-            },
-            Rounding::AwayFromZero => {
-                if self.is_neg() {
-                    return self.cutoff(
-                        Cutoff {
-                            fixed: cutoff.fixed,
-                            floating: cutoff.floating,
-                            round: Rounding::Ceiling
-                        }
-                    )
-                } else {
-                    return self.cutoff(
-                        Cutoff {
-                            fixed: cutoff.fixed,
-                            floating: cutoff.floating,
-                            round: Rounding::Floor
-                        }
-                    )
-                }
-            }
-        };
+        let increment = !self.rounds_down(cutoff)?;
         if as_pos > self.position {
             self.body.drain(0..min(self.body.len(), (as_pos - self.position)?.unsigned_value()?));
             self.position = as_pos;

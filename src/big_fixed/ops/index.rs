@@ -11,6 +11,8 @@ use crate::{
     Digit,
     Index as Indx,
     IndexError,
+    Cutoff,
+    Rounding,
     BigFixed,
     BigFixedError
 };
@@ -46,6 +48,65 @@ impl<D: Digit> BigFixed<D> {
             },
             Indx::DigitTypeInUse(_) => Err(BigFixedError::IndexError(IndexError::UsedDigitTypeAsIndex))
         }
+    }
+
+    pub fn index_cutoff_result(&self, cutoff: Cutoff<D>, position: Indx<D>, result: &mut D) -> Result<(), BigFixedError> {
+        self.index_cutoff_result_full(cutoff.round, self.cutoff_index(cutoff)?, position, result)
+    }
+
+    pub fn index_cutoff_result_full(&self, round: Rounding, cutoff_position: Indx<D>, position: Indx<D>, result: &mut D) -> Result<(), BigFixedError> {
+        if self.rounds_down_full(round, cutoff_position)? {
+            // rounding down is simple: 0 if below the cutoff, regular index if above
+            if position < cutoff_position {
+                *result = D::ZERO;
+            } else {
+                *result = *self.index_result(position)?;
+            }
+        } else {
+            // rounding up is more involved, have to simulate adding 1 to position c = cutoff_position
+            if cutoff_position >= self.position {
+                // cutoff is high enough to matter
+                if cutoff_position >= self.body_high()? {
+                    // cutting off straight to the head.
+                    // If head is 0 then this adds 1 at position and 0s everywhere else, if head is ALLONES then this sets everything to 0
+                    if cutoff_position == position && !self.is_neg() {
+                        *result = D::ONE;
+                    } else {
+                        *result = D::ZERO;
+                    }
+                } else {
+                    // simulate adding 1 in cutoff_position
+                    // carry happens for a sequence of ALLONES so find those then add 1 at the end of the sequence
+                    let pos = (cutoff_position - self.position)?.unsigned_value()?;
+                    let mut num_nines = 0;
+                    for &x in self.body.iter().skip(pos) {
+                        if x == D::ALLONES {
+                            num_nines += 1;
+                        } else {
+                            break;
+                        }
+                    }
+                    // check if addition overflowed
+                    if num_nines > 0 && pos + num_nines >= self.body.len() {
+                        panic!("addition overflowed too much"); // this can be handled, it's just a temporary panic
+                    } else {
+                        let num_nines_plus_c = (num_nines + cutoff_position)?.value()?;
+                        // addition did not go too far
+                        if position < num_nines_plus_c {
+                            *result = D::ZERO;
+                        } else if position == num_nines_plus_c {
+                            D::wrapping_increment(self.body[pos + num_nines], result);
+                        } else {
+                            *result = *self.index_result(position)?;
+                        }
+                    }
+                }
+            } else {
+                // this case represents rounding up when the cutoff index is in the tail but that is not possible
+                panic!("unreachable: cannot round up if cutoff is below position (all 0s)")
+            }
+        }
+        Ok(())
     }
 
     pub fn index_mut_result(&mut self, position: Indx<D>) -> Result<&mut D, BigFixedError> {

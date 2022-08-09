@@ -82,6 +82,8 @@ pub trait Digit:
     fn combined_add(x: Self, y: Self, result: &mut Self, carry: &mut Self);
     fn combined_mul(x: Self, y: Self, result: &mut Self, carry: &mut Self);
 
+    fn wrapping_increment(x: Self, result: &mut Self);
+
     fn neg(&self) -> Self;
 
     fn leading_zeros(&self) -> usize;
@@ -99,10 +101,12 @@ pub trait Digit:
     fn to_u64(&self) -> u64;
     fn to_u128(&self) -> u128;
     fn to_usize(&self) -> usize;
+
+    fn fmt_binary(&self, f: &mut fmt::Formatter) -> fmt::Result;
 }
 
 macro_rules! build_digit {
-    ($bits: expr, $double_bits: expr) => {
+    ($bits: expr, $double_bits: expr, $fmt_bin: expr) => {
         paste! {
             impl Digit for [<u $bits>] {
                 const DIGITBITS: usize = [<u $bits>]::BITS as usize;
@@ -136,6 +140,10 @@ macro_rules! build_digit {
                     let prod = (x as [<u $double_bits>]) * (y as [<u $double_bits>]);
                     *result = prod as Self;
                     * carry = (prod >> $bits) as Self;
+                }
+
+                fn wrapping_increment(x: Self, result: &mut Self) {
+                    *result = x.wrapping_add(1);
                 }
 
             
@@ -184,12 +192,16 @@ macro_rules! build_digit {
                 fn to_usize(&self) -> usize {
                     *self as usize
                 }
+
+                fn fmt_binary(&self, f: &mut fmt::Formatter) -> fmt::Result {
+                    write!(f, $fmt_bin, self)
+                }
             }
         }                
     };
 }
 
-build_digit!(8, 16);
-build_digit!(16, 32);
-build_digit!(32, 64);
-build_digit!(64, 128);
+build_digit!(8, 16, "{:08b}");
+build_digit!(16, 32, "{:016b}");
+build_digit!(32, 64, "{:032b}");
+build_digit!(64, 128,"{:064b}");
