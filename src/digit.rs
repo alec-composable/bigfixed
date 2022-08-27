@@ -33,7 +33,13 @@
 
 use paste::paste;
 
-use core::{cmp::{PartialEq, Eq}, fmt,
+use core::{
+    cmp::{
+        PartialEq,
+        Eq
+    },
+    iter::repeat,
+    fmt,
     ops::{
         BitAnd, BitAndAssign,
         BitOr, BitOrAssign,
@@ -43,12 +49,13 @@ use core::{cmp::{PartialEq, Eq}, fmt,
         Rem, RemAssign,
         Shl, ShlAssign,
         Shr, ShrAssign,
-    }
+    },
 };
 
+pub type Index = i64;
+
 pub trait Digit:
-    'static
-    + Clone + Copy + PartialEq + Eq + PartialOrd
+    Clone + Copy + PartialEq + Eq + PartialOrd
     + BitAnd<Self, Output = Self> + BitAndAssign<Self>
     + BitOr<Self, Output = Self> + BitOrAssign<Self>
     + BitXor<Self, Output = Self> + BitXorAssign<Self>
@@ -63,20 +70,16 @@ pub trait Digit:
 {
     const DIGITBITS: usize;
     const DIGITBYTES: usize = Self::DIGITBITS / 8;
+    const DIGITBITSI: Index = Self::DIGITBITS as Index;
+    const DIGITBYTESI: Index = Self::DIGITBYTES as Index;
 
     const ZERO: Self;
     const ONE: Self;
     const GREATESTBIT: Self;
     const ALLONES: Self;
 
-    // these were introduced so that indexing the head or tail can return a reference (x[-1] == &D::ZERO == D::ZEROR):
-    const ZERO_R: &'static Self;
-    const ONE_R: &'static Self;
-    const GREATESTBIT_R: &'static Self;
-    const ALLONES_R: &'static Self;
-
-    fn from_le_bytes(bytes: &[u8]) -> Self;
-    fn to_le_bytes(&self) -> Vec<u8>;
+    fn from_le_bytes<'a, I: Iterator<Item = &'a u8> + Clone>(bytes: I) -> Self;
+    fn to_le_bytes<'a>(&self) -> Vec<u8>;
 
     // these combined calls evaluate the result and overflow simultaneously, storing the results in the respective mutable values
     fn combined_add(x: Self, y: Self, result: &mut Self, carry: &mut Self);
@@ -86,7 +89,10 @@ pub trait Digit:
 
     fn neg(&self) -> Self;
 
-    fn leading_zeros(&self) -> usize;
+    fn leading_zeros(&self) -> Index;
+    fn leading_ones(&self) -> Index;
+    fn trailing_zeros(&self) -> Index;
+    fn trailing_ones(&self) -> Index;
 
     fn from_u8(x: u8) -> Self;
     fn from_u16(x: u16) -> Self;
@@ -105,6 +111,31 @@ pub trait Digit:
     fn fmt_binary(&self, f: &mut fmt::Formatter) -> fmt::Result;
 }
 
+pub trait GrowableDigit: Digit {
+    type DoubleDigit: Digit;
+}
+
+pub enum GrowableResult<D: GrowableDigit> {
+    Grown(D::DoubleDigit),
+    Ungrown(D)
+}
+
+pub trait ShrinkableDigit: Digit {
+    type HalfDigit: Digit;
+}
+pub enum ShrinkableResult<D: ShrinkableDigit> {
+    Shrunken(D::HalfDigit),
+    Unshrunken(D)
+}
+
+pub trait MalleableDigit: GrowableDigit + ShrinkableDigit {}
+
+pub enum MalleableResult<D: MalleableDigit> {
+    Shrunken(D::HalfDigit),
+    Unchanged(D),
+    Grown(D::DoubleDigit)
+}
+
 macro_rules! build_digit {
     ($bits: expr, $double_bits: expr, $fmt_bin: expr) => {
         paste! {
@@ -115,15 +146,11 @@ macro_rules! build_digit {
                 const ONE: [<u $bits>] = 1;
                 const GREATESTBIT: [<u $bits>] = !((!0) >> 1);
                 const ALLONES: [<u $bits>] = !0;
-
-                const ZERO_R: &'static [<u $bits>] = &Self::ZERO;
-                const ONE_R: &'static [<u $bits>] = &Self::ONE;
-                const GREATESTBIT_R: &'static [<u $bits>] = &Self::GREATESTBIT;
-                const ALLONES_R: &'static [<u $bits>] = &Self::ALLONES;
             
-                fn from_le_bytes(bytes: &[u8]) -> Self {
+                fn from_le_bytes<'a, I: Iterator<Item = &'a u8>>(bytes: I) -> Self {
                     let mut right_bytes = [0; Self::DIGITBYTES];
-                    right_bytes.copy_from_slice(bytes);
+                    let mut iter = bytes.chain(repeat(&0));
+                    right_bytes.fill_with(|| *(iter.next().unwrap()));
                     <[<u $bits>]>::from_le_bytes(right_bytes)
                 }
                 fn to_le_bytes(&self) -> Vec<u8> {
@@ -151,8 +178,20 @@ macro_rules! build_digit {
                     !self.wrapping_add(1)
                 }
             
-                fn leading_zeros(&self) -> usize {
-                    <[<u $bits>]>::leading_zeros(*self) as usize
+                fn leading_zeros(&self) -> Index {
+                    <[<u $bits>]>::leading_zeros(*self) as Index
+                }
+
+                fn leading_ones(&self) -> Index {
+                    <[<u $bits>]>::leading_ones(*self) as Index
+                }
+
+                fn trailing_zeros(&self) -> Index {
+                    <[<u $bits>]>::trailing_zeros(*self) as Index
+                }
+
+                fn trailing_ones(&self) -> Index {
+                    <[<u $bits>]>::trailing_ones(*self) as Index
                 }
             
                 fn from_u8(x: u8) -> Self {
@@ -194,14 +233,34 @@ macro_rules! build_digit {
                 }
 
                 fn fmt_binary(&self, f: &mut fmt::Formatter) -> fmt::Result {
-                    write!(f, $fmt_bin, self)
+                    write!(f, $fmt_bin, self).ok();
+                    write!(f, "_")
                 }
             }
         }                
     };
 }
 
-build_digit!(8, 16, "{:08b}");
-build_digit!(16, 32, "{:016b}");
-build_digit!(32, 64, "{:032b}");
+macro_rules! build_growable_digit {
+    ($bits: expr, $double_bits: expr, $fmt_bin: expr) => {
+        paste! {
+            build_digit!($bits, $double_bits, $fmt_bin);
+            
+            impl GrowableDigit for [<u $bits>] {
+                type DoubleDigit = [<u $double_bits>];
+            }
+
+            impl ShrinkableDigit for [<u $double_bits>] {
+                type HalfDigit = [<u $bits>];
+            }
+        }
+    };
+}
+
+build_growable_digit!(8, 16, "{:08b}");
+build_growable_digit!(16, 32, "{:016b}");
+build_growable_digit!(32, 64, "{:032b}");
 build_digit!(64, 128,"{:064b}");
+
+impl MalleableDigit for u16 {}
+impl MalleableDigit for u32 {}

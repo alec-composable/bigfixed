@@ -1,6 +1,7 @@
 use crate::{
     Digit,
     Index,
+    Rounding,
     BigFixed,
     BigFixedError
 };
@@ -78,7 +79,9 @@ impl<D: Digit> BigFixed<D> {
                 Take<Repeat<&D>>,
                 Take<Skip<Iter<D>>>
             >, Take<Repeat<&D>>
-        > , BigFixedError> {
+        >,
+        BigFixedError
+    > {
         self.properly_positioned_screen()?;
         let body_high = self.body_high()?;
         let low = low.cast_to_position()?;
@@ -105,7 +108,9 @@ impl<D: Digit> BigFixed<D> {
                 Rev<Take<Skip<Iter<D>>>>
             >,
             Take<Repeat<&D>>
-        >, BigFixedError> {
+        >,
+        BigFixedError
+    > {
         self.properly_positioned_screen()?;
         let body_high = self.body_high()?;
         let low = low.cast_to_position()?;
@@ -124,6 +129,19 @@ impl<D: Digit> BigFixed<D> {
                 repeat(D::ZERO_R).take((self.position - low)?.unsigned_value()?)
             )
         )
+    }
+
+    pub fn range_iter_cutoff_full(&self, round: Rounding, cutoff_position: Index<D>, low: Index<D>, high: Index<D>) -> Result<
+        Take<Repeat<&D>>
+    , BigFixedError> {
+        self.properly_positioned_screen()?;
+        if self.rounds_down_full(round, cutoff_position)? {
+            Ok(
+                repeat(D::ZERO_R).take((low - cutoff_position)?.unsigned_value()?)
+            )
+        } else {
+            panic!("cannot round up yet");
+        }
     }
 
     pub fn valid_range(&self) -> Result<Range<Index<D>>, BigFixedError> {

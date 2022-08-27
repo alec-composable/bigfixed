@@ -1,98 +1,157 @@
-/*use bigfixed::{digit::*, Index, BigFixed};
+use bigfixed::*;
+use Index::{Position};
+use Rounding::*;
+
+type D = u8;
 
 #[test]
-fn index_position() {
-    let x = BigFixed::construct(ALLONES, vec![5], Index::Position(-5)).unwrap();
-    assert_eq!(x[Index::Position(-700)], 0, "tail far");
-    assert_eq!(x[Index::Position(-6)], 0, "tail");
-    assert_eq!(x[Index::Position(-5)], 5, "body");
-    assert_eq!(x[Index::Position(-4)], ALLONES, "head");
-    assert_eq!(x[Index::Position(6)], ALLONES, "head far");
+fn positive() {
+    // 00000000 00000011.10000001 10000000 00000000
+    let a: BigFixedVec<D> = BigFixedVec {
+        head: 0b00000000,
+        body: vec![0b10000000, 0b10000001, 0b00000011],
+        position: Position(-2)
+    };
+
+    test(&a, Floor, -3, &[0b00000000, 0b10000000, 0b10000001, 0b00000011, 0b00000000, 0b00000000]);
+    test(&a, Floor, -2, &[0b00000000, 0b10000000, 0b10000001, 0b00000011, 0b00000000, 0b00000000]);
+    test(&a, Floor, -1, &[0b00000000, 0b00000000, 0b10000001, 0b00000011, 0b00000000, 0b00000000]);
+    test(&a, Floor,  0, &[0b00000000, 0b00000000, 0b00000000, 0b00000011, 0b00000000, 0b00000000]);
+    test(&a, Floor,  1, &[0b00000000, 0b00000000, 0b00000000, 0b00000000, 0b00000000, 0b00000000]);
+    test(&a, Floor,  2, &[0b00000000, 0b00000000, 0b00000000, 0b00000000, 0b00000000, 0b00000000]);
+
+    test(&a, Ceiling, -3, &[0b00000000, 0b10000000, 0b10000001, 0b00000011, 0b00000000, 0b00000000]);
+    test(&a, Ceiling, -2, &[0b00000000, 0b10000000, 0b10000001, 0b00000011, 0b00000000, 0b00000000]);
+    test(&a, Ceiling, -1, &[0b00000000, 0b00000000, 0b10000010, 0b00000011, 0b00000000, 0b00000000]);
+    test(&a, Ceiling,  0, &[0b00000000, 0b00000000, 0b00000000, 0b00000100, 0b00000000, 0b00000000]);
+    test(&a, Ceiling,  1, &[0b00000000, 0b00000000, 0b00000000, 0b00000000, 0b00000001, 0b00000000]);
+    test(&a, Ceiling,  2, &[0b00000000, 0b00000000, 0b00000000, 0b00000000, 0b00000000, 0b00000001]);
+
+    test(&a, Round, -3, &[0b00000000, 0b10000000, 0b10000001, 0b00000011, 0b00000000, 0b00000000]);
+    test(&a, Round, -2, &[0b00000000, 0b10000000, 0b10000001, 0b00000011, 0b00000000, 0b00000000]);
+    test(&a, Round, -1, &[0b00000000, 0b00000000, 0b10000010, 0b00000011, 0b00000000, 0b00000000]);
+    test(&a, Round,  0, &[0b00000000, 0b00000000, 0b00000000, 0b00000100, 0b00000000, 0b00000000]);
+    test(&a, Round,  1, &[0b00000000, 0b00000000, 0b00000000, 0b00000000, 0b00000000, 0b00000000]);
+    test(&a, Round,  2, &[0b00000000, 0b00000000, 0b00000000, 0b00000000, 0b00000000, 0b00000000]);
+
+    test(&a, TowardsZero, -3, &[0b00000000, 0b10000000, 0b10000001, 0b00000011, 0b00000000, 0b00000000]);
+    test(&a, TowardsZero, -2, &[0b00000000, 0b10000000, 0b10000001, 0b00000011, 0b00000000, 0b00000000]);
+    test(&a, TowardsZero, -1, &[0b00000000, 0b00000000, 0b10000001, 0b00000011, 0b00000000, 0b00000000]);
+    test(&a, TowardsZero,  0, &[0b00000000, 0b00000000, 0b00000000, 0b00000011, 0b00000000, 0b00000000]);
+    test(&a, TowardsZero,  1, &[0b00000000, 0b00000000, 0b00000000, 0b00000000, 0b00000000, 0b00000000]);
+    test(&a, TowardsZero,  2, &[0b00000000, 0b00000000, 0b00000000, 0b00000000, 0b00000000, 0b00000000]);
+
+    test(&a, AwayFromZero, -3, &[0b00000000, 0b10000000, 0b10000001, 0b00000011, 0b00000000, 0b00000000]);
+    test(&a, AwayFromZero, -2, &[0b00000000, 0b10000000, 0b10000001, 0b00000011, 0b00000000, 0b00000000]);
+    test(&a, AwayFromZero, -1, &[0b00000000, 0b00000000, 0b10000010, 0b00000011, 0b00000000, 0b00000000]);
+    test(&a, AwayFromZero,  0, &[0b00000000, 0b00000000, 0b00000000, 0b00000100, 0b00000000, 0b00000000]);
+    test(&a, AwayFromZero,  1, &[0b00000000, 0b00000000, 0b00000000, 0b00000000, 0b00000001, 0b00000000]);
+    test(&a, AwayFromZero,  2, &[0b00000000, 0b00000000, 0b00000000, 0b00000000, 0b00000000, 0b00000001]);
 }
 
 #[test]
-fn index_bit() {
-    let x = BigFixed::construct(ALLONES, vec![5], Index::Position(0)).unwrap();
-    assert_eq!(x[Index::Bit(-700)], 0, "tail far");
-    assert_eq!(x[Index::Bit(-1)], 0, "tail");
-    assert_eq!(x[Index::Bit(0)], 1, "body 0");
-    assert_eq!(x[Index::Bit(1)], 0, "body 1");
-    assert_eq!(x[Index::Bit(2)], 1, "body 2");
-    assert_eq!(x[Index::Bit(3)], 0, "body 3");
-    assert_eq!(x[Index::Bit(DIGITBITS as isize)], 1, "head");
-    assert_eq!(x[Index::Bit(DIGITBITS as isize * 700)], 1, "head far");
+fn negative() {
+    // 11111111 11110001.10000001 10000000 00000000
+    let b: BigFixedVec<D> = BigFixedVec {
+        head: 0b11111111,
+        body: vec![0b10000000, 0b10000001, 0b11110001],
+        position: Position(-2)
+    };
+
+    test(&b, Floor, -3, &[0b00000000, 0b10000000, 0b10000001, 0b11110001, 0b11111111, 0b11111111]);
+    test(&b, Floor, -2, &[0b00000000, 0b10000000, 0b10000001, 0b11110001, 0b11111111, 0b11111111]);
+    test(&b, Floor, -1, &[0b00000000, 0b00000000, 0b10000001, 0b11110001, 0b11111111, 0b11111111]);
+    test(&b, Floor,  0, &[0b00000000, 0b00000000, 0b00000000, 0b11110001, 0b11111111, 0b11111111]);
+    test(&b, Floor,  1, &[0b00000000, 0b00000000, 0b00000000, 0b00000000, 0b11111111, 0b11111111]);
+    test(&b, Floor,  2, &[0b00000000, 0b00000000, 0b00000000, 0b00000000, 0b00000000, 0b11111111]);
+
+    test(&b, Ceiling, -3, &[0b00000000, 0b10000000, 0b10000001, 0b11110001, 0b11111111, 0b11111111]);
+    test(&b, Ceiling, -2, &[0b00000000, 0b10000000, 0b10000001, 0b11110001, 0b11111111, 0b11111111]);
+    test(&b, Ceiling, -1, &[0b00000000, 0b00000000, 0b10000010, 0b11110001, 0b11111111, 0b11111111]);
+    test(&b, Ceiling,  0, &[0b00000000, 0b00000000, 0b00000000, 0b11110010, 0b11111111, 0b11111111]);
+    test(&b, Ceiling,  1, &[0b00000000, 0b00000000, 0b00000000, 0b00000000, 0b00000000, 0b00000000]);
+    test(&b, Ceiling,  2, &[0b00000000, 0b00000000, 0b00000000, 0b00000000, 0b00000000, 0b00000000]);
 }
 
 #[test]
-fn index_mut_position() {
-    let mut x = BigFixed::ZERO.clone();
-    x[Index::Position(0)] = 1;
-    assert_eq!(x, BigFixed::from(1), "zero to one");
-    x[Index::Position(0)] = 0;
-    assert!(x.full_eq(&BigFixed {
-        head: 0,
-        body: vec![0],
-        position: Index::Position(0)
-    }).unwrap(), "one to zero");
-    x[Index::Position(3)] = 1;
-    assert!(x.full_eq(&BigFixed {
-        head: 0,
-        body: vec![0, 0, 0, 1],
-        position: Index::Position(0)
-    }).unwrap(), "into head");
-    x[Index::Position(-2)] = ALLONES;
-    assert!(x.full_eq(&BigFixed {
-        head: 0,
-        body: vec![ALLONES, 0, 0, 0, 0, 1],
-        position: Index::Position(-2)
-    }).unwrap(), "into tail");
+fn nine() {
+    // 00000000 11111111.00000000
+    let e: BigFixedVec<D> = BigFixedVec {
+        head: 0b00000000,
+        body: vec![0b11111111],
+        position: Position(0)
+    };
+
+    test(&e, Floor, -1, &[0b00000000, 0b11111111, 0b00000000, 0b00000000]);
+    test(&e, Floor,  0, &[0b00000000, 0b11111111, 0b00000000, 0b00000000]);
+    test(&e, Floor,  1, &[0b00000000, 0b00000000, 0b00000000, 0b00000000]);
+    test(&e, Floor,  2, &[0b00000000, 0b00000000, 0b00000000, 0b00000000]);
+
+    test(&e, Ceiling, -1, &[0b00000000, 0b11111111, 0b00000000, 0b00000000]);
+    test(&e, Ceiling,  0, &[0b00000000, 0b11111111, 0b00000000, 0b00000000]);
+    test(&e, Ceiling,  1, &[0b00000000, 0b00000000, 0b00000001, 0b00000000]);
+    test(&e, Ceiling,  2, &[0b00000000, 0b00000000, 0b00000000, 0b00000001]);
 }
 
-// gives a reference to the digit in the corresponding position, not to the bit itself
+// unformatted cases
 #[test]
-fn index_mut_bit() {
-    let mut x = BigFixed::from(0);
-    x[Index::Bit(0)] = 1;
-    assert_eq!(x, BigFixed::from(1), "zero to one");
-    x[Index::Bit(0)] = 0;
-    assert!(x.full_eq(&BigFixed {
-        head: 0,
-        body: vec![0],
-        position: Index::Position(0)
-    }).unwrap(), "one to zero");
-    x[Index::Bit(3 * DIGITBITS as isize + 3)] = 1;
-    assert!(x.full_eq(&BigFixed {
-        head: 0,
-        body: vec![0, 0, 0, 1],
-        position: Index::Position(0)
-    }).unwrap(), "into head");
-    x[Index::Bit(-2 * DIGITBITS as isize)] = ALLONES;
-    assert!(x.full_eq(&BigFixed {
-        head: 0,
-        body: vec![ALLONES, 0, 0, 0, 0, 1],
-        position: Index::Position(-2)
-    }).unwrap(), "into tail");
+fn unformatted_positive() {
+    // 00000000 00000000 11111111 11111111.00000000 00000000
+    let c: BigFixedVec<D> = BigFixedVec {
+        head: 0b00000000,
+        body: vec![0b00000000, 0b11111111, 0b11111111, 0b00000000],
+        position: Position(-1)
+    };
+
+    test(&c, Floor, -2, &[0b00000000, 0b00000000, 0b11111111, 0b11111111, 0b00000000, 0b00000000, 0b00000000]);
+    test(&c, Floor, -1, &[0b00000000, 0b00000000, 0b11111111, 0b11111111, 0b00000000, 0b00000000, 0b00000000]);
+    test(&c, Floor,  0, &[0b00000000, 0b00000000, 0b11111111, 0b11111111, 0b00000000, 0b00000000, 0b00000000]);
+    test(&c, Floor,  1, &[0b00000000, 0b00000000, 0b00000000, 0b11111111, 0b00000000, 0b00000000, 0b00000000]);
+    test(&c, Floor,  2, &[0b00000000, 0b00000000, 0b00000000, 0b00000000, 0b00000000, 0b00000000, 0b00000000]);
+    test(&c, Floor,  3, &[0b00000000, 0b00000000, 0b00000000, 0b00000000, 0b00000000, 0b00000000, 0b00000000]);
+    test(&c, Floor,  4, &[0b00000000, 0b00000000, 0b00000000, 0b00000000, 0b00000000, 0b00000000, 0b00000000]);
+
+    test(&c, Ceiling, -2, &[0b00000000, 0b00000000, 0b11111111, 0b11111111, 0b00000000, 0b00000000, 0b00000000]);
+    test(&c, Ceiling, -1, &[0b00000000, 0b00000000, 0b11111111, 0b11111111, 0b00000000, 0b00000000, 0b00000000]);
+    test(&c, Ceiling,  0, &[0b00000000, 0b00000000, 0b11111111, 0b11111111, 0b00000000, 0b00000000, 0b00000000]);
+    test(&c, Ceiling,  1, &[0b00000000, 0b00000000, 0b00000000, 0b00000000, 0b00000001, 0b00000000, 0b00000000]);
+    test(&c, Ceiling,  2, &[0b00000000, 0b00000000, 0b00000000, 0b00000000, 0b00000001, 0b00000000, 0b00000000]);
+    test(&c, Ceiling,  3, &[0b00000000, 0b00000000, 0b00000000, 0b00000000, 0b00000000, 0b00000001, 0b00000000]);
+    test(&c, Ceiling,  4, &[0b00000000, 0b00000000, 0b00000000, 0b00000000, 0b00000000, 0b00000000, 0b00000001]);
 }
 
 #[test]
-fn set_bit() {
-    let mut x = BigFixed::from(-1);
-    x.set_bit(4, 0);
-    assert!(x.full_eq(&BigFixed {
-        head: ALLONES,
-        body: vec![!16],
-        position: Index::Position(0)
-    }).unwrap(), "one bit");
-    x.set_bit(4, 1);
-    assert!(x.full_eq(&BigFixed {
-        head: ALLONES,
-        body: vec![ALLONES],
-        position: Index::Position(0)
-    }).unwrap(), "one bit");
-    x.set_bit(-1, 0);
-    assert!(x.full_eq(&BigFixed {
-        head: ALLONES,
-        body: vec![0, ALLONES],
-        position: Index::Position(-1)
-    }).unwrap(), "one bit");
-}*/
+fn unformatted_negative() {
+    // 11111111 11111111.00000000 00000000
+    let d: BigFixedVec<D> = BigFixedVec {
+        head: 0b11111111,
+        body: vec![0b00000000, 0b11111111],
+        position: Position(-1)
+    };
+
+    test(&d, Floor, -2, &[0b00000000, 0b00000000, 0b11111111, 0b11111111, 0b11111111]);
+    test(&d, Floor, -1, &[0b00000000, 0b00000000, 0b11111111, 0b11111111, 0b11111111]);
+    test(&d, Floor,  0, &[0b00000000, 0b00000000, 0b11111111, 0b11111111, 0b11111111]);
+    test(&d, Floor,  1, &[0b00000000, 0b00000000, 0b00000000, 0b11111111, 0b11111111]);
+    test(&d, Floor,  2, &[0b00000000, 0b00000000, 0b00000000, 0b00000000, 0b11111111]);
+
+    test(&d, Ceiling, -2, &[0b00000000, 0b00000000, 0b11111111, 0b11111111, 0b11111111]);
+    test(&d, Ceiling, -1, &[0b00000000, 0b00000000, 0b11111111, 0b11111111, 0b11111111]);
+    test(&d, Ceiling,  0, &[0b00000000, 0b00000000, 0b11111111, 0b11111111, 0b11111111]);
+    test(&d, Ceiling,  1, &[0b00000000, 0b00000000, 0b00000000, 0b00000000, 0b00000000]);
+    test(&d, Ceiling,  2, &[0b00000000, 0b00000000, 0b00000000, 0b00000000, 0b00000000]);
+}
+
+// result is the expected read values starting from just below a's position and going until just above a's body high
+fn test(a: &BigFixedVec<D>, round: Rounding, cutoff_index: isize, result: &[D]) {
+    assert!(a.properly_positioned());
+    let mut on = (a.position - Position(1)).unwrap();
+    let top = a.body_high().unwrap();
+    assert_eq!((top - on).unwrap().unsigned_value().unwrap() + 2, result.len(), "mismatch in expected number of terms");
+    for r in result {
+        let mut res = !r; // won't be equal if nothing changed
+        a.index_cutoff_result_full(round, Position(cutoff_index), on, &mut res).unwrap();
+        assert_eq!(res, *r, "{:?} {:?} {} {}", a, round, cutoff_index, on);
+        on += Position(1);
+    }
+}

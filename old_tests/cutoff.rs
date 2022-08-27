@@ -41,9 +41,9 @@ fn cutoff_index() {
     cutoff_index_result().unwrap();
 }
 
-fn cutoff_index_result() -> Result<(), BigFixedError> {
+fn cutoff_index_result() -> Result<(), BigFixedVecError> {
     // 00000000 00000011.10000001 10000000
-    let a: BigFixed<D> = BigFixed {
+    let a: BigFixedVec<D> = BigFixedVec {
         head: 0,
         body: vec![0b10000000, 0b10000001, 0b00000011],
         position: Position(-2)
@@ -52,7 +52,7 @@ fn cutoff_index_result() -> Result<(), BigFixedError> {
     assert_eq!(a.greatest_bit_position()?, Bit(1));
 
     // 11111111 11110001.10000001 10000000
-    let b: BigFixed<D> = BigFixed {
+    let b: BigFixedVec<D> = BigFixedVec {
         head: D::ALLONES,
         body: vec![0b10000000, 0b10000001, 0b11110001],
         position: Position(-2)
